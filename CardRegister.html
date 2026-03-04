@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Card Creator (Unique Card Documents)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; 
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 2rem;
+        }
+        .card-form {
+            max-width: 500px;
+            width: 100%;
+            background-color: #ffffff;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1f2937;
+        }
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            background-color: #f9fafb;
+            transition: all 0.2s;
+        }
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+        .loading-icon {
+            border-top: 4px solid #4f46e5;
+            border-right: 4px solid transparent;
+            border-radius: 50%;
+            width: 1.5rem;
+            height: 1.5rem;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container" class="card-form">
+        <h1 class="text-3xl font-bold text-indigo-600 mb-6 text-center">
+            New Kanban Card Entry
+        </h1>
+
+        <div id="loading-state" class="text-center text-gray-500 py-8">
+            <div class="loading-icon mx-auto mb-3"></div>
+            Connecting to Database and Loading Locations...
+        </div>
+
+        <form id="card-form" class="hidden">
+            <!-- Step 1: Location Select (Dynamically Populated) -->
+            <div class="form-group">
+                <label for="locationSelect" class="form-label">1. Target Location</label>
+                <select id="locationSelect" class="form-select" required disabled>
+                    <option value="" disabled selected>Loading locations...</option>
+                </select>
+            </div>
+
+            <!-- Step 2: Part Number Select (Dynamic) -->
+            <div class="form-group">
+                <label for="partSelect" class="form-label">2. Part Number</label>
+                <select id="partSelect" class="form-select" disabled required>
+                    <option value="" disabled selected>Select a location first...</option>
+                </select>
+                <p id="part-details" class="mt-2 text-sm text-gray-500 italic h-4"></p>
+            </div>
+
+            <!-- Step 3: Card Type Select -->
+            <div class="form-group">
+                <label for="typeSelect" class="form-label">3. Card Type</label>
+                <select id="typeSelect" class="form-select" required>
+                    <option value="FG">FG (Final Goods)</option>
+                    <option value="WIP">WIP (Work In Progress)</option>
+                </select>
+            </div>
+
+            <!-- Step 4: Quantity Input -->
+            <div class="form-group">
+                <label for="quantityInput" class="form-label">4. Quantity (Qt)</label>
+                <input type="number" id="quantityInput" class="form-input" min="1" value="1" required>
+            </div>
+            
+            <button type="submit" id="submitBtn" class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition duration-200 disabled:bg-gray-400">
+                Create & Register Kanban Card
+            </button>
+        </form>
+
+        <div id="message-box" class="mt-6 p-3 rounded-lg text-center hidden font-medium"></div>
+    </div>
+
+    <script type="module">
+        // --- Firebase Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-app.js";
+        import { getFirestore, addDoc, collection, getDocs, setLogLevel } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore.js";
+
+        // Global Firebase Instances
+        let db;
+        let allPartsCache = {}; // Cache to store parts loaded per location
+
+        // UI elements
+        const loadingStateEl = document.getElementById('loading-state');
+        const cardFormEl = document.getElementById('card-form');
+        const locationSelect = document.getElementById('locationSelect');
+        const partSelect = document.getElementById('partSelect');
+        const typeSelect = document.getElementById('typeSelect');
+        const quantityInput = document.getElementById('quantityInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const messageBox = document.getElementById('message-box');
+        const partDetailsEl = document.getElementById('part-details');
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-5Hjv6WZGU6jjGvzbNQGZq1N5eTxhS-4",
+            authDomain: "kanban-171e6.firebaseapp.com",
+            projectId: "kanban-171e6",
+            storageBucket: "kanban-171e6.firebasestorage.app",
+            messagingSenderId: "131597045172",
+            appId: "1:131597045172:web:27177f11d68e495fbbb6e1"
+        };
+        
+        // Top-level collection names
+        const LOCATIONS_COLLECTION = 'Locations';
+        const PARTS_SUBCOLLECTION = 'Parts';
+        const CARDS_COLLECTION = 'Cards'; 
+
+        setLogLevel('Debug');
+
+        /**
+         * Utility function to display messages to the user.
+         */
+        const showMessage = (text, type = 'info') => {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-yellow-100', 'text-yellow-800', 'bg-indigo-100', 'text-indigo-800');
+            
+            let bgColor, textColor;
+            if (type === 'success') {
+                bgColor = 'bg-green-100';
+                textColor = 'text-green-800';
+            } else if (type === 'error') {
+                bgColor = 'bg-red-100';
+                textColor = 'text-red-800';
+            } else {
+                bgColor = 'bg-indigo-100';
+                textColor = 'text-indigo-800';
+            }
+            messageBox.classList.add(bgColor, textColor);
+        };
+
+        /**
+         * Fetches all available locations from the top-level Locations collection and populates the select box.
+         */
+        const loadAvailableLocations = async () => {
+            locationSelect.innerHTML = '<option value="" disabled selected>Loading locations...</option>';
+            locationSelect.disabled = true;
+
+            try {
+                // Target path: /Locations
+                const locationsCollectionRef = collection(db, LOCATIONS_COLLECTION);
+                const querySnapshot = await getDocs(locationsCollectionRef);
+
+                const locations = [];
+                querySnapshot.forEach((doc) => {
+                    locations.push({ id: doc.id, name: doc.id }); 
+                });
+
+                locationSelect.innerHTML = '<option value="" disabled selected>Select Target Location</option>';
+                if (locations.length === 0) {
+                    locationSelect.innerHTML = '<option value="" disabled selected>No locations found. Please ensure the top-level "Locations" collection has documents.</option>';
+                    showMessage('No locations found. Check the "Locations" collection.', 'error');
+                } else {
+                    locations.forEach(location => {
+                        const option = document.createElement('option');
+                        option.value = location.id;
+                        option.textContent = location.id; 
+                        locationSelect.appendChild(option);
+                    });
+                    locationSelect.disabled = false;
+                    showMessage('Locations loaded. Select a location to load parts.', 'info');
+                }
+
+            } catch (error) {
+                console.error('Error loading available locations:', error);
+                locationSelect.innerHTML = '<option value="" disabled selected>Error loading locations.</option>';
+                showMessage(`Failed to load locations: ${error.message}. Check console.`, 'error');
+            }
+        };
+
+
+        /**
+         * Fetches all registered parts for a given location and populates the part selection menu.
+         * @param {string} locationId - The ID of the location (e.g., 'FG').
+         */
+        const loadPartsForLocation = async (locationId) => {
+            partSelect.innerHTML = '<option value="" disabled selected>Loading parts...</option>';
+            partSelect.disabled = true;
+            partDetailsEl.textContent = '';
+            messageBox.classList.add('hidden'); // Clear previous messages
+
+            if (allPartsCache[locationId]) {
+                populatePartSelect(allPartsCache[locationId]);
+                return;
+            }
+
+            try {
+                // Target path: /Locations/{locationId}/Parts
+                const partsCollectionRef = collection(db, LOCATIONS_COLLECTION, locationId, PARTS_SUBCOLLECTION);
+                const querySnapshot = await getDocs(partsCollectionRef);
+
+                const parts = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    parts.push({
+                        id: doc.id,
+                        PartNumber: doc.id,
+                        Names: data.Names,
+                        Description: data.Description,
+                    });
+                });
+                
+                allPartsCache[locationId] = parts;
+                populatePartSelect(parts);
+
+            } catch (error) {
+                console.error(`Error loading parts for ${locationId}:`, error);
+                partSelect.innerHTML = '<option value="" disabled selected>Error loading parts.</option>';
+                showMessage(`Failed to load parts for ${locationId}. Check console.`, 'error');
+            }
+        };
+
+        /**
+         * Populates the Part Select dropdown with fetched data.
+         * @param {Array<Object>} parts - Array of part objects.
+         */
+        const populatePartSelect = (parts) => {
+            partSelect.innerHTML = '<option value="" disabled selected>Select Part Number</option>';
+            if (parts.length === 0) {
+                partSelect.innerHTML = '<option value="" disabled selected>No parts found in this location.</option>';
+                partSelect.disabled = true;
+                return;
+            }
+
+            parts.forEach(part => {
+                const option = document.createElement('option');
+                option.value = part.id;
+                option.textContent = `${part.id} - ${part.Names || part.Description || 'N/A'}`; 
+                partSelect.appendChild(option);
+            });
+            partSelect.disabled = false;
+        };
+
+        /**
+         * Handle form submission to create the Kanban card record in the top-level Cards collection.
+         */
+        const handleFormSubmit = async (event) => {
+            event.preventDefault();
+            
+            const locationId = locationSelect.value;
+            const partNumber = partSelect.value;
+            const cardType = typeSelect.value;
+            const quantity = parseInt(quantityInput.value, 10);
+            
+            if (!locationId || !partNumber || !cardType || isNaN(quantity) || quantity < 1) {
+                showMessage('Please fill all fields correctly.', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registering Card...';
+
+            try {
+                // 1. Reference the top-level 'Cards' collection
+                const cardsCollectionRef = collection(db, CARDS_COLLECTION);
+
+                // 2. Data structure for the new Kanban card entry (Qt field updated)
+                const cardData = {
+                    Activation: false,      // Defaults to false
+                    Location: locationId,   // e.g., 'A1'
+                    Part: partNumber,       // e.g., 'PN-456'
+                    Qt: quantity,           // Updated field name: Qt
+                    Type: cardType,         // e.g., 'FG' or 'WIP'
+                    
+                    // Keeping an optional timestamp for auditing
+                    CreatedAt: new Date().toISOString(), 
+                };
+
+                // 3. Use addDoc to create a new document with an auto-generated ID
+                const newDocRef = await addDoc(cardsCollectionRef, cardData);
+
+                // Updated success message to reflect Qt
+                showMessage(`✅ Kanban Card for ${partNumber} (Qt: ${quantity}, Type: ${cardType}) successfully created! ID: ${newDocRef.id}`, 'success');
+                
+                // Reset form fields after successful submission
+                // Keep location selection, but reset part and quantity
+                partSelect.value = "";
+                quantityInput.value = 1;
+                partDetailsEl.textContent = "";
+
+            } catch (error) {
+                console.error('Error registering Kanban Card:', error);
+                showMessage(`❌ Failed to register card: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create & Register Kanban Card';
+            }
+        };
+
+        /**
+         * Main application initialization logic.
+         */
+        (async () => {
+            try {
+                if (!firebaseConfig.apiKey) {
+                    throw new Error("Firebase configuration is incomplete (missing apiKey).");
+                }
+
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                
+                // 1. Load available locations first
+                await loadAvailableLocations();
+                
+                // 2. Setup event listeners
+                locationSelect.addEventListener('change', (e) => loadPartsForLocation(e.target.value));
+                
+                partSelect.addEventListener('change', () => {
+                    const locationId = locationSelect.value;
+                    // Check if the cache is populated and part exists
+                    const selectedPart = allPartsCache[locationId]?.find(p => p.id === partSelect.value);
+                    if (selectedPart) {
+                        partDetailsEl.textContent = `Desc: ${selectedPart.Description || 'N/A'} | Code: ${selectedPart.Names || 'N/A'}`;
+                    } else {
+                        partDetailsEl.textContent = '';
+                    }
+                });
+
+                cardFormEl.addEventListener('submit', handleFormSubmit);
+
+                // Hide loading, show form
+                loadingStateEl.classList.add('hidden');
+                cardFormEl.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                loadingStateEl.textContent = 'Connection Failed.';
+                showMessage(`❌ System Error: Failed to initialize Firebase or connect to Firestore. Check console for details.`, 'error');
+            }
+        })();
+
+    </script>
+</body>
+</html>

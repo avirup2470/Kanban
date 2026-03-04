@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Data Uploader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0891b2;
+            --primary-hover: #0e7490;
+            --bg-surface: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-surface);
+            color: #1e293b;
+        }
+
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+            border-radius: 1rem;
+        }
+
+        .loc-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 3.5rem;
+            cursor: pointer;
+            border-radius: 0.75rem;
+            background-color: #f1f5f9;
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+        }
+
+        .loc-label:hover {
+            background-color: #e2e8f0;
+            color: #334155;
+        }
+
+        input[type="radio"]:checked + .loc-label {
+            background-color: #ecfeff;
+            color: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.1);
+        }
+
+        .input-field {
+            transition: border-color 0.2s, box-shadow 0.2s;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.15);
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-xl space-y-6 animate-fade-in">
+        <header class="text-center space-y-2">
+            <div class="inline-flex items-center px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-bold tracking-widest uppercase mb-2">
+                System Utility
+            </div>
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Batch Event Upload</h1>
+            <div id="status-container" class="flex items-center justify-center space-x-2">
+                <div id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
+                <p id="status-message" class="text-sm font-medium text-slate-500">Connecting to database...</p>
+            </div>
+        </header>
+
+        <div class="glass-card overflow-hidden">
+            <div id="progress-bar" class="h-1 bg-cyan-500 transition-all duration-300" style="width: 0%"></div>
+            
+            <form id="event-form" class="p-6 sm:p-8 space-y-8">
+                <section>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Step 1: Logging Location</h2>
+                        <span id="loc-indicator" class="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">Unselected</span>
+                    </div>
+                    
+                    <div id="location-selector" class="grid grid-cols-4 gap-3">
+                        <div>
+                            <input type="radio" id="loc-IM" name="location" value="IM" class="hidden" required>
+                            <label for="loc-IM" class="loc-label">IM</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="loc-PU" name="location" value="PU" class="hidden" required>
+                            <label for="loc-PU" class="loc-label">PU</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="loc-SA" name="location" value="SA" class="hidden" required>
+                            <label for="loc-SA" class="loc-label">SA</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="loc-FG" name="location" value="FG" class="hidden" required>
+                            <label for="loc-FG" class="loc-label">FG</label>
+                        </div>
+                    </div>
+                </section>
+
+                <div id="form-fields" class="space-y-6 pt-6 border-t border-slate-100 opacity-40 pointer-events-none transition-opacity duration-300">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Step 2: JSON Payload</h2>
+                            <button type="button" onclick="document.getElementById('json-input').value = ''" class="text-xs text-slate-400 hover:text-red-500">Clear</button>
+                        </div>
+                        
+                        <textarea id="json-input" required rows="6" 
+                            class="input-field w-full mono-font text-[13px] p-4 bg-slate-50 focus:bg-white resize-none"
+                            placeholder='{ "Parts document ID": "S106...", "Id": "1", "Type": "WIP", "Qt": 50, "ArrivalLocation": "IM" }'></textarea>
+                        <p class="mt-2 text-[11px] text-slate-400 flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                            Tip: Press Enter to submit. Shift + Enter for new line.
+                        </p>
+                    </div>
+
+                    <button type="submit" id="submit-btn" class="btn-primary w-full py-4 px-6 rounded-xl text-white font-bold text-lg shadow-lg flex items-center justify-center space-x-3" disabled>
+                        <span>Process Upload</span>
+                    </button>
+                </div>
+            </form>
+            
+            <div id="message-box" class="mx-6 mb-6 p-4 rounded-xl text-sm font-medium hidden"></div>
+        </div>
+
+        <footer class="text-center">
+            <a href="index.html" class="inline-flex items-center text-slate-400 hover:text-cyan-600 transition-colors text-sm font-medium">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Return to Dashboard
+            </a>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getFirestore, collection, addDoc, serverTimestamp, setLogLevel, 
+            doc, runTransaction, increment, setDoc, getDoc, getDocs, query, orderBy
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-5Hjv6WZGU6jjGvzbNQGZq1N5eTxhS-4",
+            authDomain: "kanban-171e6.firebaseapp.com",
+            projectId: "kanban-171e6",
+            storageBucket: "kanban-171e6.firebasestorage.app",
+            messagingSenderId: "131597045172",
+            appId: "1:131597045172:web:27177f11d68e495fbbb6e1"
+        };
+        
+        let db = null;
+        let isConnected = false;
+        let selectedLocationId = null;
+        const LAST_PROCESSED_FINGERPRINT_KEY = 'lastProcessedJsonFingerprint';
+
+        const form = document.getElementById('event-form');
+        const messageBox = document.getElementById('message-box');
+        const statusMessageElement = document.getElementById('status-message');
+        const statusDot = document.getElementById('status-dot');
+        const submitButton = document.getElementById('submit-btn');
+        const locationSelectorDiv = document.getElementById('location-selector');
+        const formFieldsDiv = document.getElementById('form-fields');
+        const jsonInput = document.getElementById('json-input');
+        const locIndicator = document.getElementById('loc-indicator');
+        const progressBar = document.getElementById('progress-bar');
+
+        const displayMessage = (text, type = 'info') => {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'border-red-200', 'bg-emerald-50', 'text-emerald-700', 'border-emerald-200', 'bg-blue-50', 'text-blue-700', 'border-blue-200');
+            messageBox.classList.add('border');
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
+            } else {
+                messageBox.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+            }
+        };
+
+        const updateStatus = (text, type = 'pending') => {
+            statusMessageElement.textContent = text;
+            statusDot.classList.remove('bg-yellow-400', 'bg-emerald-500', 'bg-red-500', 'animate-pulse');
+            if (type === 'connected') {
+                statusDot.classList.add('bg-emerald-500');
+            } else if (type === 'error') {
+                statusDot.classList.add('bg-red-500');
+            } else {
+                statusDot.classList.add('bg-yellow-400', 'animate-pulse');
+            }
+        };
+
+        /**
+         * FIFO Check Function
+         * 1. Searches for oldest active card to verify FIFO adherence.
+         * 2. Increments TotalCount and FIFOCount (if followed) in monthly stats.
+         */
+        const FIFOupdate = async (currentCardId, partsDocId, arrivalLocation) => {
+            try {
+                // Determine current month/year for stats doc (e.g., "March26")
+                const now = new Date();
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const monthYearStr = `${monthNames[now.getMonth()]}${now.getFullYear().toString().slice(-2)}`;
+                
+                const cardsRef = collection(db, 'Cards');
+                const querySnapshot = await getDocs(cardsRef);
+                
+                let activePartCards = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.Part === partsDocId && data.Activation === true) {
+                        activePartCards.push({ id: doc.id, ...data });
+                    }
+                });
+
+                let isFIFOFollowed = false;
+
+                if (activePartCards.length > 0) {
+                    activePartCards.sort((a, b) => {
+                        const timeA = a.LastActivated?.toMillis() || 0;
+                        const timeB = b.LastActivated?.toMillis() || 0;
+                        return timeA - timeB;
+                    });
+
+                    const oldestCard = activePartCards[0];
+                    if (oldestCard.id === currentCardId) {
+                        console.log("FIFO followed");
+                        isFIFOFollowed = true;
+                    } else {
+                        console.log(`FIFO Warning: Oldest active card is ${oldestCard.id}, but ${currentCardId} is being deactivated.`);
+                    }
+                }
+
+                // Update Monthly FIFO Stats
+                const statsDocRef = doc(db, 'Locations', arrivalLocation, 'Parts', partsDocId, 'FIFO', monthYearStr);
+                
+                await runTransaction(db, async (transaction) => {
+                    const statsDoc = await transaction.get(statsDocRef);
+                    if (!statsDoc.exists()) {
+                        transaction.set(statsDocRef, {
+                            TotalCount: 1,
+                            FIFOCount: isFIFOFollowed ? 1 : 0
+                        });
+                    } else {
+                        transaction.update(statsDocRef, {
+                            TotalCount: increment(1),
+                            FIFOCount: isFIFOFollowed ? increment(1) : increment(0)
+                        });
+                    }
+                });
+
+            } catch (err) {
+                console.error("FIFO Check/Update failed:", err);
+            }
+        };
+
+        locationSelectorDiv.addEventListener('change', (e) => {
+            if (e.target.name === 'location') {
+                selectedLocationId = e.target.value;
+                formFieldsDiv.classList.remove('opacity-40', 'pointer-events-none');
+                locIndicator.textContent = selectedLocationId;
+                locIndicator.classList.add('bg-cyan-100', 'text-cyan-700');
+                if (isConnected) submitButton.disabled = false;
+                updateStatus(`Connected: Recording at ${selectedLocationId}`, 'connected');
+            }
+        });
+
+        jsonInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!submitButton.disabled) form.requestSubmit(); 
+            }
+        });
+
+        const processSingleEvent = async (event, sourceLoggingLocation) => {
+            const partId = event['Parts document ID'];
+            const cardId = event.Id;
+            const arrivalLocation = event.ArrivalLocation; 
+            const baseQuantity = parseFloat(event.Qt); 
+
+            if (!partId || !cardId || !arrivalLocation || isNaN(baseQuantity) || baseQuantity <= 0) {
+                throw new Error("Invalid Event Data.");
+            }
+            
+            let signedQt;
+            const isProduction = sourceLoggingLocation === arrivalLocation;
+            
+            if (isProduction) {
+                const cardDocRef = doc(db, 'Cards', cardId); 
+                const cardSnapshot = await getDoc(cardDocRef);
+                if (cardSnapshot.exists() && cardSnapshot.data().Activation === true) {
+                    throw new Error(`Card ID ${cardId} is still active.`);
+                }
+                signedQt = baseQuantity;
+            } else {
+                const cardDocRef = doc(db, 'Cards', cardId); 
+                const cardSnapshot = await getDoc(cardDocRef);
+                if (cardSnapshot.exists() && cardSnapshot.data().Activation === false) {
+                    throw new Error(`Card ID ${cardId} is already inactive.`);
+                }
+                
+                // --- FIFO Check & Stats Update on Deactivation ---
+                await FIFOupdate(cardId, partId, arrivalLocation);
+                
+                signedQt = -baseQuantity;
+            }
+            
+            const partDocRef = doc(db, 'Locations', arrivalLocation, 'Parts', partId);
+            const eventCollectionRef = collection(db, 'Locations', arrivalLocation, 'Parts', partId, 'Events');
+            const cardDocRef = doc(db, 'Cards', cardId); 
+
+            const logEventPromise = addDoc(eventCollectionRef, {
+                ...event,
+                'Qt': signedQt, 
+                SourceLoggingLocation: sourceLoggingLocation, 
+                Time: serverTimestamp(),
+            });
+
+            const updateCounterPromise = runTransaction(db, async (transaction) => {
+                const partDoc = await transaction.get(partDocRef);
+                if (!partDoc.exists()) {
+                    transaction.set(partDocRef, { 'Name': partId, 'QT': signedQt, 'LastUpdated': serverTimestamp() });
+                } else {
+                    transaction.update(partDocRef, { 'QT': increment(signedQt), 'LastUpdated': serverTimestamp() });
+                }
+            });
+
+            const updateCardActivationPromise = setDoc(cardDocRef, { 
+                'Activation': isProduction,
+                'Part': partId, 
+                'LastActivated': serverTimestamp()
+            }, { merge: true });
+
+            await Promise.all([logEventPromise, updateCounterPromise, updateCardActivationPromise]);
+            return true;
+        };
+
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            const jsonString = jsonInput.value.trim();
+            let events;
+            try {
+                let parsedJson = JSON.parse(jsonString);
+                events = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
+            } catch (error) {
+                displayMessage(`JSON Error: ${error.message}`, 'error');
+                return;
+            }
+            
+            const currentFingerprint = selectedLocationId + "::" + jsonString;
+            if (localStorage.getItem(LAST_PROCESSED_FINGERPRINT_KEY) === currentFingerprint) {
+                displayMessage("Duplicate submission detected!", 'error');
+                return;
+            }
+
+            submitButton.disabled = true;
+            progressBar.style.width = '30%';
+            displayMessage(`Processing ${events.length} event(s)...`, 'info');
+
+            const eventPromises = events.map(event => processSingleEvent(event, selectedLocationId));
+            const results = await Promise.allSettled(eventPromises);
+
+            let successfulEvents = 0;
+            let errorMessage = '';
+            
+            results.forEach((result) => {
+                if (result.status === 'fulfilled') successfulEvents++;
+                else if (!errorMessage) errorMessage = result.reason.message;
+            });
+
+            progressBar.style.width = '100%';
+            if (successfulEvents < events.length) {
+                displayMessage(`Error: ${errorMessage}`, 'error');
+            } else {
+                displayMessage(`Success! ${successfulEvents} event(s) uploaded.`, 'success');
+                localStorage.setItem(LAST_PROCESSED_FINGERPRINT_KEY, currentFingerprint);
+                jsonInput.value = '';
+            }
+            
+            setTimeout(() => { progressBar.style.width = '0%'; }, 1000);
+            submitButton.disabled = false;
+        };
+
+        (async () => {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                isConnected = true;
+                form.addEventListener('submit', handleSubmit);
+                updateStatus('Database Connected', 'connected');
+            } catch (error) {
+                updateStatus('Offline', 'error');
+            }
+        })();
+    </script>
+</body>
+</html>
