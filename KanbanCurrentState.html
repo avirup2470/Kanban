@@ -86,7 +86,6 @@
             border: 1px dashed #d1d5db;
         }
 
-        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
@@ -95,7 +94,6 @@
 </head>
 <body class="flex flex-col">
 
-    <!-- Navigation Bar -->
     <nav class="sticky top-0 z-50 bg-slate-900 text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex flex-col md:flex-row items-center justify-between py-4 space-y-4 md:space-y-0">
@@ -128,24 +126,11 @@
                 </div>
             </div>
 
-            <!-- Page Views -->
-            <div id="page-IM" class="page-view active">
-                <div id="im-cards" class="flex flex-col gap-8"></div>
-            </div>
+            <div id="page-IM" class="page-view active"><div id="im-cards" class="flex flex-col gap-8"></div></div>
+            <div id="page-PU" class="page-view"><div id="pu-cards" class="flex flex-col gap-8"></div></div>
+            <div id="page-SA" class="page-view"><div id="sa-cards" class="flex flex-col gap-8"></div></div>
+            <div id="page-FG" class="page-view"><div id="fg-cards" class="flex flex-col gap-8"></div></div>
 
-            <div id="page-PU" class="page-view">
-                <div id="pu-cards" class="flex flex-col gap-8"></div>
-            </div>
-
-            <div id="page-SA" class="page-view">
-                <div id="sa-cards" class="flex flex-col gap-8"></div>
-            </div>
-
-            <div id="page-FG" class="page-view">
-                <div id="fg-cards" class="flex flex-col gap-8"></div>
-            </div>
-
-            <!-- Empty State -->
             <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 text-slate-400">
                 <svg class="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -155,7 +140,6 @@
         </div>
     </main>
 
-    <!-- Footer Section -->
     <footer class="bg-slate-900 text-gray-400 py-10 border-t border-slate-800">
         <div class="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
             <div class="space-y-4">
@@ -219,43 +203,29 @@
             'FG': { title: 'Finished Goods (FG)', container: 'fg-cards' }
         };
 
-        /**
-         * Fetches or Initializes FIFO data from Firestore
-         * Path: /Locations/{Location}/Parts/{partNumber}/FIFO/{MonthShortYear}
-         * Logic: (FIFOCount / TotalCount) * 100. Default 100% if zero/zero or missing.
-         */
         const calculateFifoPercentage = async (partNumber, location) => {
             const dateObj = new Date();
-            const month = dateObj.toLocaleString('default', { month: 'long' }); // e.g., "March"
-            const yearShort = dateObj.getFullYear().toString().slice(-2); // e.g., "26"
-            const dateId = `${month}${yearShort}`; // Result: "March26"
+            const month = dateObj.toLocaleString('default', { month: 'long' });
+            const yearShort = dateObj.getFullYear().toString().slice(-2);
+            const dateId = `${month}${yearShort}`;
 
             const fifoDocPath = `Locations/${location}/Parts/${partNumber}/FIFO/${dateId}`;
             const docRef = doc(db, fifoDocPath);
 
             try {
                 const docSnap = await getDoc(docRef);
-                
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     const total = data.TotalCount || 0;
                     const fifo = data.FIFOCount || 0;
-                    
                     if (total === 0 && fifo === 0) return 100;
                     if (total === 0) return 0;
-                    
                     return Math.round((fifo / total) * 100);
                 } else {
-                    // Document doesn't exist, create it with initial values
-                    await setDoc(docRef, {
-                        TotalCount: 0,
-                        FIFOCount: 0,
-                        LastUpdated: new Date()
-                    }, { merge: true });
+                    await setDoc(docRef, { TotalCount: 0, FIFOCount: 0, LastUpdated: new Date() }, { merge: true });
                     return 100;
                 }
             } catch (error) {
-                console.error("Error fetching FIFO:", error);
                 return "??";
             }
         };
@@ -291,7 +261,7 @@
 
             if (filtered.length === 0) {
                 emptyState.classList.remove('hidden');
-                document.getElementById('status-message').textContent = `Showing 0 active documents`;
+                document.getElementById('status-message').textContent = `Showing 0 active items`;
                 return;
             }
 
@@ -305,20 +275,20 @@
                 return acc;
             }, {});
 
-            // Render each group as a row
             for (const partKey of Object.keys(groups).sort()) {
                 const groupCards = groups[partKey];
                 
-                // Sort group cards by LastActivated (Oldest to Newest)
+                // Get the description from the first card in the group (already fetched in init)
+                const partNameHeading = groupCards[0].data.Description && groupCards[0].data.Description !== 'N/A' 
+                    ? groupCards[0].data.Description 
+                    : partKey;
+
                 groupCards.sort((a, b) => {
-                    const timeA = a.data.LastActivated ? 
-                                 (a.data.LastActivated.seconds ? a.data.LastActivated.seconds : new Date(a.data.LastActivated).getTime()) : 0;
-                    const timeB = b.data.LastActivated ? 
-                                 (b.data.LastActivated.seconds ? b.data.LastActivated.seconds : new Date(b.data.LastActivated).getTime()) : 0;
+                    const timeA = a.data.LastActivated?.seconds || new Date(a.data.LastActivated).getTime() || 0;
+                    const timeB = b.data.LastActivated?.seconds || new Date(b.data.LastActivated).getTime() || 0;
                     return timeA - timeB;
                 });
 
-                // Fetch FIFO % (MonthYear format)
                 const fifoVal = await calculateFifoPercentage(partKey, currentView);
                 const fifoColorClass = typeof fifoVal === 'number' 
                     ? (fifoVal >= 90 ? 'text-green-600 bg-green-50 border-green-100' : 'text-amber-600 bg-amber-50 border-amber-100') 
@@ -326,14 +296,18 @@
 
                 const rowHeader = `
                     <div class="flex items-center gap-4 mt-4 mb-2">
-                        <span class="bg-white px-4 py-1 rounded-full border border-gray-200 text-sm font-bold text-gray-500 shadow-sm flex items-center gap-2">
-                            <span class="text-xs uppercase text-gray-400">Part:</span> ${partKey}
+                        <span class="bg-white px-5 py-2 rounded-full border border-gray-200 text-sm font-bold text-slate-800 shadow-sm flex items-center gap-2">
+                            <span class="text-[10px] uppercase text-gray-400 font-medium tracking-widest">Part Name:</span> 
+                            <span class="tracking-tight text-base">${partNameHeading}</span>
+                        </span>
+                        <span class="bg-gray-100 px-3 py-1 rounded-full text-[10px] font-mono text-gray-500 border border-gray-200">
+                            #${partKey}
                         </span>
                         <span class="${fifoColorClass} px-3 py-1 rounded-full border text-xs font-bold shadow-sm">
-                            FIFO Status: ${fifoVal}${typeof fifoVal === 'number' ? '%' : ''}
+                            FIFO: ${fifoVal}${typeof fifoVal === 'number' ? '%' : ''}
                         </span>
                         <div class="h-[1px] flex-grow bg-gray-200"></div>
-                        <span class="text-xs text-gray-400 font-medium">${groupCards.length} matching cards</span>
+                        <span class="text-xs text-gray-400 font-medium">${groupCards.length} Cards</span>
                     </div>
                 `;
                 
@@ -358,9 +332,7 @@
                             "Qt": card.data.Qt
                         }]);
                         const qrDiv = document.getElementById(`qr-${card.id}`);
-                        if (qrDiv) {
-                            new QRCode(qrDiv, { text: payload, width: 120, height: 120 });
-                        }
+                        if (qrDiv) new QRCode(qrDiv, { text: payload, width: 120, height: 120 });
                     }, 50);
                 });
 
@@ -368,7 +340,7 @@
                 container.appendChild(rowDiv);
             }
             
-            document.getElementById('status-message').textContent = `Sync Complete • Grouped by Part Number`;
+            document.getElementById('status-message').textContent = `Sync Complete • Grouped by Part Description`;
         };
 
         const createCardElement = (card, theme) => {
@@ -379,7 +351,6 @@
             };
 
             const activationStr = formatDate(card.data.LastActivated);
-            
             const fullJson = JSON.stringify([{
                 "Parts document ID": card.data.Part,
                 "Id": card.id,
@@ -389,7 +360,7 @@
             }], null, 2);
 
             const fields = Object.entries(card.data)
-                .filter(([k]) => !['Activation', 'Part', 'Location', 'Qt', 'LastActivated'].includes(k))
+                .filter(([k]) => !['Activation', 'Part', 'Location', 'Qt', 'LastActivated', 'Description'].includes(k))
                 .map(([k, v]) => `
                     <div class="py-2 border-b border-gray-100 last:border-0">
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">${k}</span>
@@ -425,11 +396,9 @@
                                 <span class="text-[10px] font-bold text-gray-400 uppercase mb-2">Scan Payload</span>
                                 <div id="qr-${card.id}" class="qr-container shadow-inner"></div>
                             </div>
-                            
                             <div class="space-y-1 mb-4">
                                 ${fields}
                             </div>
-
                             <div class="pt-3 border-t border-gray-100">
                                 <button onclick="event.stopPropagation(); toggleJson('${card.id}')" 
                                     class="w-full text-[10px] font-bold px-3 py-2 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 transition flex items-center justify-center gap-2">
@@ -444,7 +413,7 @@
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                         </button>
                                     </div>
-                                    <p id="copy-status-${card.id}" class="text-[10px] text-green-600 mt-1 font-bold hidden text-center">COPIED TO CLIPBOARD!</p>
+                                    <p id="copy-status-${card.id}" class="text-[10px] text-green-600 mt-1 font-bold hidden text-center">COPIED!</p>
                                 </div>
                             </div>
                         </div>
@@ -468,9 +437,7 @@
                 const status = document.getElementById(`copy-status-${id}`);
                 status.classList.remove('hidden');
                 setTimeout(() => status.classList.add('hidden'), 2000);
-            } catch (err) {
-                console.error('Copy failed', err);
-            }
+            } catch (err) {}
             document.body.removeChild(textArea);
         };
 
@@ -482,7 +449,7 @@
                     if (data.Part && data.Location) {
                         try {
                             const partDoc = await getDoc(doc(db, 'Locations', data.Location, 'Parts', data.Part));
-                            if (partDoc.exists()) description = partDoc.data().Description;
+                            if (partDoc.exists()) description = partDoc.data().Description || 'N/A';
                         } catch (e) {}
                     }
                     return { id: docSnap.id, data: { ...data, Description: description } };
