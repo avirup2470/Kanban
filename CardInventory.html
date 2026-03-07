@@ -89,7 +89,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </span>
-                    <input type="text" id="searchInput" oninput="filterCards()" placeholder="Search Part, Name, Location or Trolly..." 
+                    <input type="text" id="searchInput" oninput="filterCards()" placeholder="Search (e.g. S109; 29)..." 
                         class="search-input w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 transition-all">
                 </div>
                 
@@ -225,7 +225,7 @@
                                 </div>
 
                                 <div class="flex justify-between items-end pt-1">
-                                    <p class="text-[5px] text-slate-300">ID: ${card.id.slice(0,10)}</p>
+                                    <p class="text-[5px] text-slate-300">ID: ${card.id}</p>
                                     <p class="text-[5px] text-slate-400 font-medium italic">${new Date().toLocaleDateString()}</p>
                                 </div>
                             </div>
@@ -251,12 +251,12 @@
                 grid.appendChild(cardContainer);
 
                 setTimeout(() => {
+                    // Update QR payload to requested format
                     const qrPayload = {
-                        "PN": card.data.Part || "N/A",
+                        "Parts document ID": card.data.Part || "N/A",
                         "Id": card.id,
-                        "Loc": card.data.Location || "N/A",
-                        "Type": card.data.Type || "FG",
-                        "Trolly": card.data.TrollyNo || "N/A",
+                        "ArrivalLocation": card.data.Location || "N/A",
+                        "Type": card.data.Type || "WIP",
                         "Qt": parseInt(card.data.Qt) || 0
                     };
                     
@@ -347,13 +347,26 @@
         };
 
         window.filterCards = () => {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = inventory.filter(c => (
-                c.data.Part?.toLowerCase().includes(query) ||
-                c.data.PartName?.toLowerCase().includes(query) ||
-                c.data.Location?.toLowerCase().includes(query) ||
-                c.data.TrollyNo?.toLowerCase().includes(query)
-            ));
+            const rawQuery = document.getElementById('searchInput').value.toLowerCase();
+            const queries = rawQuery.split(';').map(q => q.trim()).filter(q => q !== "");
+
+            if (queries.length === 0) {
+                renderAll(inventory);
+                return;
+            }
+
+            const filtered = inventory.filter(card => {
+                return queries.every(query => {
+                    return (
+                        card.id.toLowerCase().includes(query) ||
+                        card.data.Part?.toLowerCase().includes(query) ||
+                        card.data.PartName?.toLowerCase().includes(query) ||
+                        card.data.Location?.toLowerCase().includes(query) ||
+                        card.data.TrollyNo?.toLowerCase().includes(query)
+                    );
+                });
+            });
+            
             renderAll(filtered);
         };
 
