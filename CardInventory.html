@@ -8,6 +8,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- html2pdf.js for dedicated card-size PDF generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- html2canvas for JPEG generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
@@ -27,7 +29,7 @@
             -webkit-print-color-adjust: exact;
         }
 
-        /* Temporary container for PDF capture - strictly 90x54 */
+        /* Container for capture - strictly 90x54 */
         #pdf-isolation-chamber {
             position: absolute;
             top: -10000px;
@@ -41,13 +43,21 @@
             overflow: hidden;
         }
 
+        /* Fix for clipping: removal of line-clamp and ensuring container visibility */
+        .description-container {
+            min-height: 10mm;
+            display: block;
+            overflow: visible !important;
+            margin-bottom: 2mm;
+        }
+
         .status-badge {
             position: absolute;
             top: 2mm;
             right: 2mm;
             font-size: 7px;
             font-weight: bold;
-            padding: 1px 4px;
+            padding: 2px 4px;
             border-radius: 2px;
             text-transform: uppercase;
         }
@@ -60,7 +70,6 @@
 </head>
 <body class="min-h-screen pb-20">
 
-    <!-- Isolation point for PDF capture -->
     <div id="pdf-isolation-chamber"></div>
 
     <header class="bg-slate-900 text-white py-6 shadow-xl">
@@ -68,8 +77,8 @@
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
                     <div class="flex items-center gap-3 mb-1">
-                        <div class="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center font-bold">INV</div>
-                        <h1 class="text-2xl font-bold tracking-tight uppercase">Card Inventory Manager</h1>
+                        <div class="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center font-bold text-slate-900">VAR</div>
+                        <h1 class="text-2xl font-bold tracking-tight uppercase">Inventory Manager</h1>
                     </div>
                     <p class="text-slate-400 text-sm">Plant: VELp9 | Card Size: 90x54mm</p>
                 </div>
@@ -80,11 +89,16 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </span>
-                    <input type="text" id="searchInput" oninput="filterCards()" placeholder="Search Part Number, Name, or Location..." 
+                    <input type="text" id="searchInput" oninput="filterCards()" placeholder="Search Part, Name, Location or Trolly..." 
                         class="search-input w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 transition-all">
                 </div>
                 
-                <a href="index.html" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm font-semibold transition">Back to Dashboard</a>
+                <div class="flex gap-2">
+                    <button onclick="window.location.reload()" class="px-4 py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded text-sm font-semibold transition" title="Refresh Data">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </button>
+                    <a href="index.html" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm font-semibold transition whitespace-nowrap">Back to Dashboard</a>
+                </div>
             </div>
         </div>
     </header>
@@ -102,13 +116,13 @@
         </div>
     </main>
 
-    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl transform translate-y-32 transition-transform duration-300 pointer-events-none z-50">
-        Generating borderless PDF...
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl transform translate-y-32 transition-transform duration-300 pointer-events-none z-50">
+        Processing...
     </div>
 
     <footer class="fixed bottom-0 left-0 right-0 bg-white border-t py-4 shadow-2xl z-40">
         <div class="max-w-7xl mx-auto px-4 flex justify-between items-center text-xs text-slate-500">
-            <p>Developer: Avirup Chakraborty | Varroc Engineering Ltd.</p>
+            <p>Varroc Engineering Ltd. | Plant VELp9</p>
             <p id="statsDisplay">Total Items: 0</p>
         </div>
     </footer>
@@ -149,106 +163,125 @@
                 inventory = await Promise.all(promises);
                 document.getElementById('loading').classList.add('hidden');
                 renderAll();
+            }, (error) => {
+                console.error("Firebase Error:", error);
+                document.getElementById('loading').innerHTML = `<p class="text-red-500">Error loading data.</p>`;
             });
         }
 
         window.renderAll = (filteredData = inventory) => {
             const grid = document.getElementById('cardGrid');
-            const noResults = document.getElementById('noResults');
             const stats = document.getElementById('statsDisplay');
             grid.innerHTML = '';
             
             if (filteredData.length === 0) {
-                noResults.classList.remove('hidden');
+                document.getElementById('noResults').classList.remove('hidden');
                 stats.textContent = `Items found: 0`;
                 return;
             }
 
-            noResults.classList.add('hidden');
+            document.getElementById('noResults').classList.add('hidden');
             stats.textContent = `Total Items: ${filteredData.length}`;
 
             filteredData.forEach(card => {
                 const isActive = card.data.Activation === true;
                 const cardContainer = document.createElement('div');
-                cardContainer.className = 'flex flex-col items-center gap-3';
+                cardContainer.className = 'flex flex-col items-center gap-2';
                 
                 cardContainer.innerHTML = `
                     <div id="card-content-${card.id}" class="printable-card rounded-lg border border-slate-200 shadow-lg">
-                        <div class="status-badge ${isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}">
+                        <div class="status-badge ${isActive ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}">
                             ${isActive ? 'Active' : 'Inactive'}
                         </div>
                         <div class="flex justify-between h-full items-stretch">
-                            <div class="flex flex-col justify-between w-[58%]">
-                                <div class="space-y-1">
-                                    <div>
-                                        <h2 class="text-[7px] font-bold text-cyan-600 uppercase tracking-tighter">Part Number</h2>
-                                        <p class="text-[14px] font-bold mono-text leading-none text-slate-900">${card.data.Part || '???'}</p>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-[7px] font-bold text-cyan-600 uppercase tracking-tighter">Description</h2>
-                                        <p class="text-[9px] font-bold text-slate-700 leading-tight uppercase line-clamp-2">${card.data.PartName || 'NO DESCRIPTION'}</p>
-                                    </div>
+                            <!-- Info Left -->
+                            <div class="flex flex-col w-[62%]">
+                                <div class="mb-1">
+                                    <h2 class="text-[7px] font-bold text-cyan-600 uppercase tracking-tighter">Part Number</h2>
+                                    <p class="text-[14px] font-bold mono-text leading-tight text-slate-900">${card.data.Part || '???'}</p>
                                 </div>
-                                <div class="grid grid-cols-2 gap-1 mt-auto border-t border-slate-200 pt-1">
+                                <div class="description-container">
+                                    <h2 class="text-[7px] font-bold text-cyan-600 uppercase tracking-tighter">Description</h2>
+                                    <p class="text-[9px] font-bold text-slate-700 leading-[1.2] uppercase whitespace-normal break-words">${card.data.PartName || 'NO DESCRIPTION AVAILABLE'}</p>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-x-2 gap-y-1.5 mt-auto border-t border-slate-200 pt-2 pb-1">
                                     <div>
                                         <h2 class="text-[6px] font-bold text-slate-400 uppercase">Quantity</h2>
-                                        <p class="text-[14px] font-extrabold text-slate-900 leading-none">${card.data.Qt || 0}</p>
+                                        <p class="text-[12px] font-extrabold text-slate-900 leading-none">${card.data.Qt || 0}</p>
                                     </div>
                                     <div>
                                         <h2 class="text-[6px] font-bold text-slate-400 uppercase">Location</h2>
-                                        <p class="text-[14px] font-extrabold text-slate-900 uppercase leading-none">${card.data.Location || 'N/A'}</p>
+                                        <p class="text-[12px] font-extrabold text-slate-900 uppercase leading-none">${card.data.Location || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-[6px] font-bold text-slate-400 uppercase">Trolly No</h2>
+                                        <p class="text-[12px] font-extrabold text-blue-700 uppercase leading-none">${card.data.TrollyNo || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-[6px] font-bold text-slate-400 uppercase">Type</h2>
+                                        <p class="text-[12px] font-extrabold text-slate-900 uppercase leading-none">${card.data.Type || 'WIP'}</p>
                                     </div>
                                 </div>
-                                <div class="mt-1 flex justify-between items-end">
-                                    <div>
-                                        <p class="text-[5px] text-slate-400 uppercase">Plant: VELp9</p>
-                                        <p class="text-[5px] text-slate-300">ID: ${card.id.slice(0,12)}</p>
-                                    </div>
-                                    <p class="text-[5px] text-slate-300 italic mb-0.5">${new Date().toLocaleDateString()}</p>
+
+                                <div class="flex justify-between items-end pt-1">
+                                    <p class="text-[5px] text-slate-300">ID: ${card.id.slice(0,10)}</p>
+                                    <p class="text-[5px] text-slate-400 font-medium italic">${new Date().toLocaleDateString()}</p>
                                 </div>
                             </div>
-                            <!-- Enlarged QR Section -->
-                            <div class="w-[42%] flex flex-col items-center justify-center border-l border-dashed border-slate-200 pl-3">
-                                <div id="qr-container-${card.id}" class="p-1 bg-white border border-slate-50"></div>
-                                <p class="text-[7px] mt-2 font-black text-slate-500 text-center uppercase tracking-widest">SCAN FOR TRACKING</p>
+
+                            <!-- QR Right -->
+                            <div class="w-[38%] flex flex-col items-center justify-center border-l border-dashed border-slate-200 pl-2">
+                                <div id="qr-container-${card.id}" class="p-1 bg-white"></div>
+                                <p class="text-[6px] mt-2 font-black text-slate-400 text-center uppercase tracking-widest">SCAN TO TRACK</p>
                             </div>
                         </div>
                     </div>
-                    <button onclick="downloadCardPDF('${card.id}', '${card.data.Part}')" 
-                        class="w-full max-w-[90mm] flex items-center justify-center gap-2 py-2.5 bg-slate-800 hover:bg-blue-600 text-white rounded-lg font-bold text-sm transition-all shadow-md">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        DOWNLOAD PDF
-                    </button>
+                    <div class="w-full max-w-[90mm] flex gap-2">
+                        <button onclick="handleDownload('${card.id}', '${card.data.Part}', '${card.data.TrollyNo}', 'pdf')" 
+                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-800 hover:bg-cyan-600 text-white rounded-lg font-bold text-xs transition-all shadow-md">
+                            PDF
+                        </button>
+                        <button onclick="handleDownload('${card.id}', '${card.data.Part}', '${card.data.TrollyNo}', 'jpeg')" 
+                            class="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-slate-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs transition-all shadow-md">
+                            JPEG
+                        </button>
+                    </div>
                 `;
                 grid.appendChild(cardContainer);
 
                 setTimeout(() => {
-                    // Specific QR Data Format as requested
                     const qrPayload = {
-                        "Parts document ID": card.data.Part || "N/A",
+                        "PN": card.data.Part || "N/A",
                         "Id": card.id,
-                        "ArrivalLocation": card.data.Location || "N/A",
-                        "Type": card.data.Type || "WIP",
+                        "Loc": card.data.Location || "N/A",
+                        "Type": card.data.Type || "FG",
+                        "Trolly": card.data.TrollyNo || "N/A",
                         "Qt": parseInt(card.data.Qt) || 0
                     };
                     
                     const container = document.getElementById(`qr-container-${card.id}`);
-                    if (container) new QRCode(container, { 
-                        text: JSON.stringify(qrPayload), 
-                        width: 85, 
-                        height: 85,
-                        correctLevel: QRCode.CorrectLevel.M // Medium correction for dense JSON strings
-                    });
-                }, 50);
+                    if (container) {
+                        new QRCode(container, { 
+                            text: JSON.stringify(qrPayload), 
+                            width: 80, 
+                            height: 80,
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    }
+                }, 100);
             });
         };
 
-        window.downloadCardPDF = (id, partNum) => {
+        window.handleDownload = async (id, partNum, trollyNo, type) => {
             const original = document.getElementById(`card-content-${id}`);
             const chamber = document.getElementById('pdf-isolation-chamber');
             const toast = document.getElementById('toast');
             
+            toast.textContent = `Generating ${type.toUpperCase()}...`;
             toast.style.transform = 'translateY(0) translateX(-50%)';
+            
+            const fileName = `T${trollyNo || 'N-A'}_P${partNum || 'N-A'}`;
             
             const clone = original.cloneNode(true);
             clone.style.boxShadow = 'none';
@@ -256,6 +289,7 @@
             clone.style.margin = '0';
             clone.style.borderRadius = '0';
             
+            // Re-draw Canvas for clone
             const originalCanvas = original.querySelector('canvas');
             const cloneCanvasContainer = clone.querySelector('[id^="qr-container-"]');
             
@@ -270,38 +304,46 @@
 
             chamber.innerHTML = '';
             chamber.appendChild(clone);
-            
-            const options = {
-                margin: 0,
-                filename: `Kanban_${partNum || 'ID'}.pdf`,
-                image: { type: 'jpeg', quality: 1.0 },
-                html2canvas: { 
-                    scale: 4, 
-                    useCORS: true, 
-                    logging: false,
-                    letterRendering: true,
-                    scrollY: 0,
-                    scrollX: 0,
-                    backgroundColor: '#ffffff'
-                },
-                jsPDF: { 
-                    unit: 'mm', 
-                    format: [90, 54], 
-                    orientation: 'landscape',
-                    compress: true
-                }
-            };
 
-            html2pdf().set(options).from(clone).save().then(() => {
+            try {
+                if (type === 'pdf') {
+                    const options = {
+                        margin: 0,
+                        filename: `${fileName}.pdf`,
+                        image: { type: 'jpeg', quality: 1.0 },
+                        html2canvas: { 
+                            scale: 4, 
+                            useCORS: true, 
+                            logging: false,
+                            letterRendering: true,
+                            scrollY: 0,
+                            scrollX: 0
+                        },
+                        jsPDF: { unit: 'mm', format: [90, 54], orientation: 'landscape' }
+                    };
+                    await html2pdf().set(options).from(clone).save();
+                } else {
+                    const canvas = await html2canvas(clone, { 
+                        scale: 4, 
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        scrollY: 0,
+                        scrollX: 0
+                    });
+                    const link = document.createElement('a');
+                    link.download = `${fileName}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 1.0);
+                    link.click();
+                }
+            } catch (err) {
+                console.error("Download Error:", err);
+            } finally {
                 chamber.innerHTML = ''; 
                 setTimeout(() => {
                     toast.style.transform = 'translateY(150%) translateX(-50%)';
-                }, 2000);
-            }).catch(err => {
-                console.error("PDF Error:", err);
-                chamber.innerHTML = '';
-                toast.style.transform = 'translateY(150%) translateX(-50%)';
-            });
+                }, 1000);
+            }
         };
 
         window.filterCards = () => {
@@ -309,7 +351,8 @@
             const filtered = inventory.filter(c => (
                 c.data.Part?.toLowerCase().includes(query) ||
                 c.data.PartName?.toLowerCase().includes(query) ||
-                c.data.Location?.toLowerCase().includes(query)
+                c.data.Location?.toLowerCase().includes(query) ||
+                c.data.TrollyNo?.toLowerCase().includes(query)
             ));
             renderAll(filtered);
         };
