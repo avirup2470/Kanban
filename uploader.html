@@ -106,7 +106,7 @@
             <div class="inline-flex items-center px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-bold tracking-widest uppercase mb-2">
                 System Utility
             </div>
-            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Batch Event Upload</h1>
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Single Event Upload</h1>
             <div id="status-container" class="flex items-center justify-center space-x-2">
                 <div id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
                 <p id="status-message" class="text-sm font-medium text-slate-500">Connecting to database...</p>
@@ -123,7 +123,7 @@
                         <span id="loc-indicator" class="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">Unselected</span>
                     </div>
                     
-                    <div id="location-selector" class="grid grid-cols-4 gap-3">
+                    <div id="location-selector" class="grid grid-cols-5 gap-2">
                         <div>
                             <input type="radio" id="loc-IM" name="location" value="IM" class="hidden" required>
                             <label for="loc-IM" class="loc-label">IM</label>
@@ -140,6 +140,10 @@
                             <input type="radio" id="loc-FG" name="location" value="FG" class="hidden" required>
                             <label for="loc-FG" class="loc-label">FG</label>
                         </div>
+                        <div>
+                            <input type="radio" id="loc-DIS" name="location" value="DIS" class="hidden" required>
+                            <label for="loc-DIS" class="loc-label">DIS</label>
+                        </div>
                     </div>
                 </section>
 
@@ -147,7 +151,7 @@
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Step 2: JSON Payload</h2>
-                            <button type="button" onclick="document.getElementById('json-input').value = ''" class="text-xs text-slate-400 hover:text-red-500">Clear</button>
+                            <button type="button" id="manual-clear" class="text-xs text-slate-400 hover:text-red-500">Clear</button>
                         </div>
                         
                         <textarea id="json-input" required rows="6" 
@@ -155,7 +159,7 @@
                             placeholder='{ "Parts document ID": "S106...", "Id": "1", "Type": "WIP", "Qt": 50, "ArrivalLocation": "IM" }'></textarea>
                         <p class="mt-2 text-[11px] text-slate-400 flex items-center">
                             <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-                            Tip: Press Enter to submit. Shift + Enter for new line.
+                            Note: Input is cleared and focused automatically for scanner use.
                         </p>
                     </div>
 
@@ -167,20 +171,13 @@
             
             <div id="message-box" class="mx-6 mb-6 p-4 rounded-xl text-sm font-medium hidden"></div>
         </div>
-
-        <footer class="text-center">
-            <a href="index.html" class="inline-flex items-center text-slate-400 hover:text-cyan-600 transition-colors text-sm font-medium">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                Return to Dashboard
-            </a>
-        </footer>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
-            getFirestore, collection, addDoc, serverTimestamp, setLogLevel, 
-            doc, runTransaction, increment, setDoc, getDoc, getDocs, query, orderBy
+            getFirestore, collection, addDoc, serverTimestamp, updateDoc,
+            doc, runTransaction, increment, setDoc, getDoc, getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -195,7 +192,6 @@
         let db = null;
         let isConnected = false;
         let selectedLocationId = null;
-        const LAST_PROCESSED_FINGERPRINT_KEY = 'lastProcessedJsonFingerprint';
 
         const form = document.getElementById('event-form');
         const messageBox = document.getElementById('message-box');
@@ -207,6 +203,7 @@
         const jsonInput = document.getElementById('json-input');
         const locIndicator = document.getElementById('loc-indicator');
         const progressBar = document.getElementById('progress-bar');
+        const manualClear = document.getElementById('manual-clear');
 
         const displayMessage = (text, type = 'info') => {
             messageBox.textContent = text;
@@ -234,14 +231,15 @@
             }
         };
 
-        /**
-         * FIFO Check Function
-         * 1. Searches for oldest active card to verify FIFO adherence.
-         * 2. Increments TotalCount and FIFOCount (if followed) in monthly stats.
-         */
+        const clearAndRefocus = () => {
+            jsonInput.value = '';
+            submitButton.disabled = false;
+            // Immediate focus for the scanner
+            jsonInput.focus();
+        };
+
         const FIFOupdate = async (currentCardId, partsDocId, arrivalLocation) => {
             try {
-                // Determine current month/year for stats doc (e.g., "March26")
                 const now = new Date();
                 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
                 const monthYearStr = `${monthNames[now.getMonth()]}${now.getFullYear().toString().slice(-2)}`;
@@ -250,51 +248,41 @@
                 const querySnapshot = await getDocs(cardsRef);
                 
                 let activePartCards = [];
+                let currentCardData = null;
+
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
                     if (data.Part === partsDocId && data.Activation === true) {
-                        activePartCards.push({ id: doc.id, ...data });
+                        const cardInfo = { id: doc.id, ...data };
+                        activePartCards.push(cardInfo);
+                        if (doc.id === currentCardId) currentCardData = cardInfo;
                     }
                 });
 
-                let isFIFOFollowed = false;
+                if (!currentCardData) return;
 
-                if (activePartCards.length > 0) {
-                    activePartCards.sort((a, b) => {
-                        const timeA = a.LastActivated?.toMillis() || 0;
-                        const timeB = b.LastActivated?.toMillis() || 0;
-                        return timeA - timeB;
-                    });
+                const currentTimestamp = currentCardData.LastActivated?.toMillis() || Infinity;
+                let isFIFOFollowed = true;
 
-                    const oldestCard = activePartCards[0];
-                    if (oldestCard.id === currentCardId) {
-                        console.log("FIFO followed");
-                        isFIFOFollowed = true;
-                    } else {
-                        console.log(`FIFO Warning: Oldest active card is ${oldestCard.id}, but ${currentCardId} is being deactivated.`);
+                for (const card of activePartCards) {
+                    const cardTimestamp = card.LastActivated?.toMillis() || 0;
+                    if (card.id !== currentCardId && cardTimestamp < currentTimestamp) {
+                        isFIFOFollowed = false;
+                        await updateDoc(doc(db, 'Cards', card.id), { Red: true });
                     }
                 }
 
-                // Update Monthly FIFO Stats
                 const statsDocRef = doc(db, 'Locations', arrivalLocation, 'Parts', partsDocId, 'FIFO', monthYearStr);
-                
                 await runTransaction(db, async (transaction) => {
                     const statsDoc = await transaction.get(statsDocRef);
                     if (!statsDoc.exists()) {
-                        transaction.set(statsDocRef, {
-                            TotalCount: 1,
-                            FIFOCount: isFIFOFollowed ? 1 : 0
-                        });
+                        transaction.set(statsDocRef, { TotalCount: 1, FIFOCount: isFIFOFollowed ? 1 : 0 });
                     } else {
-                        transaction.update(statsDocRef, {
-                            TotalCount: increment(1),
-                            FIFOCount: isFIFOFollowed ? increment(1) : increment(0)
-                        });
+                        transaction.update(statsDocRef, { TotalCount: increment(1), FIFOCount: isFIFOFollowed ? increment(1) : increment(0) });
                     }
                 });
-
             } catch (err) {
-                console.error("FIFO Check/Update failed:", err);
+                console.error("FIFO failed:", err);
             }
         };
 
@@ -303,17 +291,26 @@
                 selectedLocationId = e.target.value;
                 formFieldsDiv.classList.remove('opacity-40', 'pointer-events-none');
                 locIndicator.textContent = selectedLocationId;
+                locIndicator.classList.remove('bg-slate-100', 'text-slate-500');
                 locIndicator.classList.add('bg-cyan-100', 'text-cyan-700');
                 if (isConnected) submitButton.disabled = false;
                 updateStatus(`Connected: Recording at ${selectedLocationId}`, 'connected');
+                
+                // Auto-focus on location change so user can start scanning immediately
+                setTimeout(() => jsonInput.focus(), 100);
             }
         });
 
         jsonInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!submitButton.disabled) form.requestSubmit(); 
+                if (!submitButton.disabled) form.dispatchEvent(new Event('submit', { cancelable: true }));
             }
+        });
+
+        manualClear.addEventListener('click', () => {
+            jsonInput.value = '';
+            jsonInput.focus();
         });
 
         const processSingleEvent = async (event, sourceLoggingLocation) => {
@@ -328,30 +325,24 @@
             
             let signedQt;
             const isProduction = sourceLoggingLocation === arrivalLocation;
-            
+            const cardDocRef = doc(db, 'Cards', cardId); 
+            const cardSnapshot = await getDoc(cardDocRef);
+
             if (isProduction) {
-                const cardDocRef = doc(db, 'Cards', cardId); 
-                const cardSnapshot = await getDoc(cardDocRef);
                 if (cardSnapshot.exists() && cardSnapshot.data().Activation === true) {
-                    throw new Error(`Card ID ${cardId} is still active.`);
+                    throw new Error(`Card ID ${cardId} is already active.`);
                 }
                 signedQt = baseQuantity;
             } else {
-                const cardDocRef = doc(db, 'Cards', cardId); 
-                const cardSnapshot = await getDoc(cardDocRef);
                 if (cardSnapshot.exists() && cardSnapshot.data().Activation === false) {
                     throw new Error(`Card ID ${cardId} is already inactive.`);
                 }
-                
-                // --- FIFO Check & Stats Update on Deactivation ---
                 await FIFOupdate(cardId, partId, arrivalLocation);
-                
                 signedQt = -baseQuantity;
             }
             
             const partDocRef = doc(db, 'Locations', arrivalLocation, 'Parts', partId);
             const eventCollectionRef = collection(db, 'Locations', arrivalLocation, 'Parts', partId, 'Events');
-            const cardDocRef = doc(db, 'Cards', cardId); 
 
             const logEventPromise = addDoc(eventCollectionRef, {
                 ...event,
@@ -369,60 +360,53 @@
                 }
             });
 
-            const updateCardActivationPromise = setDoc(cardDocRef, { 
-                'Activation': isProduction,
-                'Part': partId, 
-                'LastActivated': serverTimestamp()
-            }, { merge: true });
+            const cardUpdateData = { 'Activation': isProduction, 'Part': partId, 'LastActivated': serverTimestamp() };
+            if (!isProduction) cardUpdateData.Red = false;
 
-            await Promise.all([logEventPromise, updateCounterPromise, updateCardActivationPromise]);
+            await Promise.all([logEventPromise, updateCounterPromise, setDoc(cardDocRef, cardUpdateData, { merge: true })]);
             return true;
         };
 
         const handleSubmit = async (e) => {
-            e.preventDefault();
-            const jsonString = jsonInput.value.trim();
-            let events;
-            try {
-                let parsedJson = JSON.parse(jsonString);
-                events = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
-            } catch (error) {
-                displayMessage(`JSON Error: ${error.message}`, 'error');
-                return;
-            }
+            if (e) e.preventDefault();
             
-            const currentFingerprint = selectedLocationId + "::" + jsonString;
-            if (localStorage.getItem(LAST_PROCESSED_FINGERPRINT_KEY) === currentFingerprint) {
-                displayMessage("Duplicate submission detected!", 'error');
-                return;
-            }
+            const jsonString = jsonInput.value.trim();
+            if (!jsonString) return;
 
             submitButton.disabled = true;
             progressBar.style.width = '30%';
-            displayMessage(`Processing ${events.length} event(s)...`, 'info');
+            progressBar.classList.replace('bg-red-500', 'bg-cyan-500');
 
-            const eventPromises = events.map(event => processSingleEvent(event, selectedLocationId));
-            const results = await Promise.allSettled(eventPromises);
+            try {
+                let event = JSON.parse(jsonString);
+                if (Array.isArray(event)) {
+                    if (event.length > 1) throw new Error("Please submit only one JSON object at a time.");
+                    event = event[0];
+                }
+                if (typeof event !== 'object' || event === null) throw new Error("Invalid JSON structure.");
 
-            let successfulEvents = 0;
-            let errorMessage = '';
-            
-            results.forEach((result) => {
-                if (result.status === 'fulfilled') successfulEvents++;
-                else if (!errorMessage) errorMessage = result.reason.message;
-            });
+                await processSingleEvent(event, selectedLocationId);
+                
+                progressBar.style.width = '100%';
+                displayMessage("Success! Upload complete.", 'success');
+                
+                // Clear and refocus regardless of success/fail to keep scanning flow
+                setTimeout(() => {
+                    clearAndRefocus();
+                    progressBar.style.width = '0%';
+                }, 800);
 
-            progressBar.style.width = '100%';
-            if (successfulEvents < events.length) {
-                displayMessage(`Error: ${errorMessage}`, 'error');
-            } else {
-                displayMessage(`Success! ${successfulEvents} event(s) uploaded.`, 'success');
-                localStorage.setItem(LAST_PROCESSED_FINGERPRINT_KEY, currentFingerprint);
-                jsonInput.value = '';
+            } catch (err) {
+                progressBar.style.width = '100%';
+                progressBar.classList.replace('bg-cyan-500', 'bg-red-500');
+                displayMessage(`Error: ${err.message}`, 'error');
+                
+                // Refocus even on error so they can re-scan immediately
+                setTimeout(() => {
+                    clearAndRefocus();
+                    progressBar.style.width = '0%';
+                }, 1500);
             }
-            
-            setTimeout(() => { progressBar.style.width = '0%'; }, 1000);
-            submitButton.disabled = false;
         };
 
         (async () => {
@@ -432,6 +416,9 @@
                 isConnected = true;
                 form.addEventListener('submit', handleSubmit);
                 updateStatus('Database Connected', 'connected');
+                
+                // Initial focus if a location was somehow pre-selected or once selected
+                jsonInput.focus();
             } catch (error) {
                 updateStatus('Offline', 'error');
             }
