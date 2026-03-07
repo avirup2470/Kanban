@@ -75,7 +75,7 @@
         </div>
 
         <form id="card-form" class="hidden">
-            <!-- Step 1: Location Select (Dynamically Populated) -->
+            <!-- Step 1: Location Select -->
             <div class="form-group">
                 <label for="locationSelect" class="form-label">1. Target Location</label>
                 <select id="locationSelect" class="form-select" required disabled>
@@ -83,7 +83,7 @@
                 </select>
             </div>
 
-            <!-- Step 2: Part Number Select (Dynamic) -->
+            <!-- Step 2: Part Number Select -->
             <div class="form-group">
                 <label for="partSelect" class="form-label">2. Part Number</label>
                 <select id="partSelect" class="form-select" disabled required>
@@ -101,9 +101,15 @@
                 </select>
             </div>
 
-            <!-- Step 4: Quantity Input -->
+            <!-- Step 4: Trolly Number Input -->
             <div class="form-group">
-                <label for="quantityInput" class="form-label">4. Quantity (Qt)</label>
+                <label for="trollyInput" class="form-label">4. Trolly No.</label>
+                <input type="text" id="trollyInput" class="form-input" placeholder="Enter Trolly ID" required>
+            </div>
+
+            <!-- Step 5: Quantity Input -->
+            <div class="form-group">
+                <label for="quantityInput" class="form-label">5. Quantity (Qt)</label>
                 <input type="number" id="quantityInput" class="form-input" min="1" value="1" required>
             </div>
             
@@ -116,26 +122,23 @@
     </div>
 
     <script type="module">
-        // --- Firebase Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-app.js";
         import { getFirestore, addDoc, collection, getDocs, setLogLevel } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore.js";
 
-        // Global Firebase Instances
         let db;
-        let allPartsCache = {}; // Cache to store parts loaded per location
+        let allPartsCache = {};
 
-        // UI elements
         const loadingStateEl = document.getElementById('loading-state');
         const cardFormEl = document.getElementById('card-form');
         const locationSelect = document.getElementById('locationSelect');
         const partSelect = document.getElementById('partSelect');
         const typeSelect = document.getElementById('typeSelect');
+        const trollyInput = document.getElementById('trollyInput');
         const quantityInput = document.getElementById('quantityInput');
         const submitBtn = document.getElementById('submitBtn');
         const messageBox = document.getElementById('message-box');
         const partDetailsEl = document.getElementById('part-details');
 
-        // --- Firebase Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyD-5Hjv6WZGU6jjGvzbNQGZq1N5eTxhS-4",
             authDomain: "kanban-171e6.firebaseapp.com",
@@ -145,234 +148,127 @@
             appId: "1:131597045172:web:27177f11d68e495fbbb6e1"
         };
         
-        // Top-level collection names
         const LOCATIONS_COLLECTION = 'Locations';
         const PARTS_SUBCOLLECTION = 'Parts';
         const CARDS_COLLECTION = 'Cards'; 
 
-        setLogLevel('Debug');
-
-        /**
-         * Utility function to display messages to the user.
-         */
         const showMessage = (text, type = 'info') => {
             messageBox.textContent = text;
-            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-yellow-100', 'text-yellow-800', 'bg-indigo-100', 'text-indigo-800');
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800', 'bg-indigo-100', 'text-indigo-800');
             
-            let bgColor, textColor;
-            if (type === 'success') {
-                bgColor = 'bg-green-100';
-                textColor = 'text-green-800';
-            } else if (type === 'error') {
-                bgColor = 'bg-red-100';
-                textColor = 'text-red-800';
-            } else {
-                bgColor = 'bg-indigo-100';
-                textColor = 'text-indigo-800';
-            }
-            messageBox.classList.add(bgColor, textColor);
+            let classes = type === 'success' ? ['bg-green-100', 'text-green-800'] : 
+                          type === 'error' ? ['bg-red-100', 'text-red-800'] : 
+                          ['bg-indigo-100', 'text-indigo-800'];
+            
+            messageBox.classList.add(...classes);
+            messageBox.classList.remove('hidden');
         };
 
-        /**
-         * Fetches all available locations from the top-level Locations collection and populates the select box.
-         */
         const loadAvailableLocations = async () => {
-            locationSelect.innerHTML = '<option value="" disabled selected>Loading locations...</option>';
-            locationSelect.disabled = true;
-
             try {
-                // Target path: /Locations
-                const locationsCollectionRef = collection(db, LOCATIONS_COLLECTION);
-                const querySnapshot = await getDocs(locationsCollectionRef);
-
-                const locations = [];
-                querySnapshot.forEach((doc) => {
-                    locations.push({ id: doc.id, name: doc.id }); 
-                });
-
+                const querySnapshot = await getDocs(collection(db, LOCATIONS_COLLECTION));
                 locationSelect.innerHTML = '<option value="" disabled selected>Select Target Location</option>';
-                if (locations.length === 0) {
-                    locationSelect.innerHTML = '<option value="" disabled selected>No locations found. Please ensure the top-level "Locations" collection has documents.</option>';
-                    showMessage('No locations found. Check the "Locations" collection.', 'error');
-                } else {
-                    locations.forEach(location => {
-                        const option = document.createElement('option');
-                        option.value = location.id;
-                        option.textContent = location.id; 
-                        locationSelect.appendChild(option);
-                    });
-                    locationSelect.disabled = false;
-                    showMessage('Locations loaded. Select a location to load parts.', 'info');
-                }
-
+                querySnapshot.forEach((doc) => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = doc.id;
+                    locationSelect.appendChild(option);
+                });
+                locationSelect.disabled = false;
             } catch (error) {
-                console.error('Error loading available locations:', error);
-                locationSelect.innerHTML = '<option value="" disabled selected>Error loading locations.</option>';
-                showMessage(`Failed to load locations: ${error.message}. Check console.`, 'error');
+                showMessage(`Failed to load locations: ${error.message}`, 'error');
             }
         };
 
-
-        /**
-         * Fetches all registered parts for a given location and populates the part selection menu.
-         * @param {string} locationId - The ID of the location (e.g., 'FG').
-         */
         const loadPartsForLocation = async (locationId) => {
             partSelect.innerHTML = '<option value="" disabled selected>Loading parts...</option>';
             partSelect.disabled = true;
-            partDetailsEl.textContent = '';
-            messageBox.classList.add('hidden'); // Clear previous messages
-
             if (allPartsCache[locationId]) {
                 populatePartSelect(allPartsCache[locationId]);
                 return;
             }
-
             try {
-                // Target path: /Locations/{locationId}/Parts
-                const partsCollectionRef = collection(db, LOCATIONS_COLLECTION, locationId, PARTS_SUBCOLLECTION);
-                const querySnapshot = await getDocs(partsCollectionRef);
-
+                const querySnapshot = await getDocs(collection(db, LOCATIONS_COLLECTION, locationId, PARTS_SUBCOLLECTION));
                 const parts = [];
                 querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    parts.push({
-                        id: doc.id,
-                        PartNumber: doc.id,
-                        Names: data.Names,
-                        Description: data.Description,
-                    });
+                    parts.push({ id: doc.id, ...doc.data() });
                 });
-                
                 allPartsCache[locationId] = parts;
                 populatePartSelect(parts);
-
             } catch (error) {
-                console.error(`Error loading parts for ${locationId}:`, error);
-                partSelect.innerHTML = '<option value="" disabled selected>Error loading parts.</option>';
-                showMessage(`Failed to load parts for ${locationId}. Check console.`, 'error');
+                showMessage(`Error loading parts: ${error.message}`, 'error');
             }
         };
 
-        /**
-         * Populates the Part Select dropdown with fetched data.
-         * @param {Array<Object>} parts - Array of part objects.
-         */
         const populatePartSelect = (parts) => {
             partSelect.innerHTML = '<option value="" disabled selected>Select Part Number</option>';
             if (parts.length === 0) {
-                partSelect.innerHTML = '<option value="" disabled selected>No parts found in this location.</option>';
-                partSelect.disabled = true;
+                partSelect.innerHTML = '<option value="" disabled selected>No parts found</option>';
                 return;
             }
-
             parts.forEach(part => {
                 const option = document.createElement('option');
                 option.value = part.id;
-                option.textContent = `${part.id} - ${part.Names || part.Description || 'N/A'}`; 
+                option.textContent = `${part.id} - ${part.Names || part.Description || 'N/A'}`;
                 partSelect.appendChild(option);
             });
             partSelect.disabled = false;
         };
 
-        /**
-         * Handle form submission to create the Kanban card record in the top-level Cards collection.
-         */
         const handleFormSubmit = async (event) => {
             event.preventDefault();
-            
-            const locationId = locationSelect.value;
-            const partNumber = partSelect.value;
-            const cardType = typeSelect.value;
-            const quantity = parseInt(quantityInput.value, 10);
-            
-            if (!locationId || !partNumber || !cardType || isNaN(quantity) || quantity < 1) {
-                showMessage('Please fill all fields correctly.', 'error');
+            const data = {
+                Activation: false,
+                Location: locationSelect.value,
+                Part: partSelect.value,
+                Type: typeSelect.value,
+                TrollyNo: trollyInput.value.trim(),
+                Qt: parseInt(quantityInput.value, 10),
+                CreatedAt: new Date().toISOString()
+            };
+
+            if (!data.Location || !data.Part || !data.TrollyNo || isNaN(data.Qt)) {
+                showMessage('Please fill all fields.', 'error');
                 return;
             }
 
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Registering Card...';
+            submitBtn.textContent = 'Registering...';
 
             try {
-                // 1. Reference the top-level 'Cards' collection
-                const cardsCollectionRef = collection(db, CARDS_COLLECTION);
-
-                // 2. Data structure for the new Kanban card entry (Qt field updated)
-                const cardData = {
-                    Activation: false,      // Defaults to false
-                    Location: locationId,   // e.g., 'A1'
-                    Part: partNumber,       // e.g., 'PN-456'
-                    Qt: quantity,           // Updated field name: Qt
-                    Type: cardType,         // e.g., 'FG' or 'WIP'
-                    
-                    // Keeping an optional timestamp for auditing
-                    CreatedAt: new Date().toISOString(), 
-                };
-
-                // 3. Use addDoc to create a new document with an auto-generated ID
-                const newDocRef = await addDoc(cardsCollectionRef, cardData);
-
-                // Updated success message to reflect Qt
-                showMessage(`✅ Kanban Card for ${partNumber} (Qt: ${quantity}, Type: ${cardType}) successfully created! ID: ${newDocRef.id}`, 'success');
-                
-                // Reset form fields after successful submission
-                // Keep location selection, but reset part and quantity
+                const docRef = await addDoc(collection(db, CARDS_COLLECTION), data);
+                showMessage(`✅ Card created successfully! ID: ${docRef.id}`, 'success');
                 partSelect.value = "";
+                trollyInput.value = "";
                 quantityInput.value = 1;
                 partDetailsEl.textContent = "";
-
             } catch (error) {
-                console.error('Error registering Kanban Card:', error);
-                showMessage(`❌ Failed to register card: ${error.message}`, 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Create & Register Kanban Card';
             }
         };
 
-        /**
-         * Main application initialization logic.
-         */
         (async () => {
             try {
-                if (!firebaseConfig.apiKey) {
-                    throw new Error("Firebase configuration is incomplete (missing apiKey).");
-                }
-
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
-                
-                // 1. Load available locations first
                 await loadAvailableLocations();
                 
-                // 2. Setup event listeners
                 locationSelect.addEventListener('change', (e) => loadPartsForLocation(e.target.value));
-                
                 partSelect.addEventListener('change', () => {
-                    const locationId = locationSelect.value;
-                    // Check if the cache is populated and part exists
-                    const selectedPart = allPartsCache[locationId]?.find(p => p.id === partSelect.value);
-                    if (selectedPart) {
-                        partDetailsEl.textContent = `Desc: ${selectedPart.Description || 'N/A'} | Code: ${selectedPart.Names || 'N/A'}`;
-                    } else {
-                        partDetailsEl.textContent = '';
-                    }
+                    const selectedPart = allPartsCache[locationSelect.value]?.find(p => p.id === partSelect.value);
+                    partDetailsEl.textContent = selectedPart ? `Desc: ${selectedPart.Description || 'N/A'}` : '';
                 });
-
                 cardFormEl.addEventListener('submit', handleFormSubmit);
 
-                // Hide loading, show form
                 loadingStateEl.classList.add('hidden');
                 cardFormEl.classList.remove('hidden');
-
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
                 loadingStateEl.textContent = 'Connection Failed.';
-                showMessage(`❌ System Error: Failed to initialize Firebase or connect to Firestore. Check console for details.`, 'error');
             }
         })();
-
     </script>
 </body>
 </html>
