@@ -13,7 +13,8 @@
             overflow: hidden;
             background: #0a0a0a;
             font-family: 'Courier Prime', monospace;
-            touch-action: manipulation;
+            touch-action: none; /* Disable all browser touch actions for game control */
+            user-select: none;
         }
 
         #game-container {
@@ -53,21 +54,6 @@
             to { transform: translateX(-50%); }
         }
 
-        .smoke {
-            position: absolute;
-            background: rgba(100, 100, 100, 0.2);
-            border-radius: 50%;
-            pointer-events: none;
-            animation: rise 5s infinite ease-out;
-            z-index: 3;
-        }
-
-        @keyframes rise {
-            0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0; }
-            20% { opacity: 0.4; }
-            100% { transform: translateY(-400px) scale(5) rotate(90deg); opacity: 0; }
-        }
-
         .money-toast {
             position: absolute;
             color: #4ade80;
@@ -88,7 +74,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            padding: 20px;
+            padding: 10px;
             pointer-events: none;
             z-index: 100;
         }
@@ -106,13 +92,14 @@
 
         #death-toast {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
             background: rgba(153, 27, 27, 0.9);
             color: white;
-            padding: 10px 20px;
+            padding: 8px 12px;
             border-left: 4px solid #f87171;
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             text-transform: uppercase;
             z-index: 160;
             pointer-events: none;
@@ -121,8 +108,8 @@
         }
 
         @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
     </style>
 </head>
@@ -131,49 +118,49 @@
 <div id="game-container">
     <div class="industrial-bg"></div>
     <div class="industrial-bg-near"></div>
-    <div id="smoke-container"></div>
     
     <div id="ui-layer" class="flex justify-between items-start text-white">
-        <div class="bg-black/60 p-3 rounded border-l-4 border-yellow-600 backdrop-blur-sm">
-            <div class="text-2xl font-black text-yellow-500 font-mono tracking-tighter" id="money-display">BUDGET: $0</div>
-            <div class="text-[10px] uppercase tracking-widest text-zinc-400 mt-1 font-bold italic" id="status-msg">Operation: Continuous Profit</div>
+        <div class="bg-black/60 p-2 rounded border-l-4 border-yellow-600 backdrop-blur-sm max-w-[50%]">
+            <div class="text-lg md:text-2xl font-black text-yellow-500 font-mono tracking-tighter" id="money-display">BUDGET: $0</div>
+            <div class="text-[8px] md:text-[10px] uppercase tracking-widest text-zinc-400 mt-1 font-bold italic" id="status-msg">Operation: Continuous Profit</div>
         </div>
-        <div class="text-right bg-black/60 p-3 rounded border-r-4 border-zinc-500 backdrop-blur-sm">
-            <div class="text-sm font-bold text-zinc-300" id="high-score-display">COLLECTIVE PEAK: $0</div>
-            <div class="text-[9px] opacity-60 font-mono uppercase" id="sync-status">Syncing to Hive Mind...</div>
+        <div class="text-right bg-black/60 p-2 rounded border-r-4 border-zinc-500 backdrop-blur-sm">
+            <div class="text-[10px] md:text-sm font-bold text-zinc-300" id="high-score-display">PEAK: $0</div>
+            <div class="text-[7px] md:text-[9px] opacity-60 font-mono uppercase" id="sync-status">Syncing...</div>
         </div>
     </div>
 
     <div id="death-toast"></div>
 
     <div id="overlay" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4 text-center">
-        <div class="bg-zinc-900 border-x-4 border-t-8 border-zinc-700 p-8 max-w-md w-full rounded shadow-2xl">
+        <div class="bg-zinc-900 border-x-4 border-t-8 border-zinc-700 p-6 md:p-8 max-w-md w-full rounded shadow-2xl overflow-y-auto max-h-full">
             <div id="start-screen">
-                <h1 class="text-4xl font-black text-white mb-2 italic tracking-tighter">INDUSTRIAL LEAP</h1>
-                <p class="text-zinc-500 mb-6 text-xs uppercase tracking-widest">Shared Suffering Framework</p>
-                <div class="grid grid-cols-2 gap-2 mb-8">
-                    <button onclick="startGame('AVIRUP')" class="bg-blue-900/40 hover:bg-blue-600 p-4 rounded text-white border-b-4 border-blue-950 transition-all font-bold">AVIRUP 👷</button>
-                    <button onclick="startGame('LAMA')" class="bg-red-900/40 hover:bg-red-600 p-4 rounded text-white border-b-4 border-red-950 transition-all font-bold">LAMA 🧔</button>
-                    <button onclick="startGame('MASOOM')" class="bg-green-900/40 hover:bg-green-600 p-4 rounded text-white border-b-4 border-green-950 transition-all font-bold">MASOOM 👨‍🏭</button>
-                    <button onclick="startGame('SAGAR')" class="bg-purple-900/40 hover:bg-purple-600 p-4 rounded text-white border-b-4 border-purple-950 transition-all font-bold">SAGAR 👮</button>
-                    <button onclick="startGame('PRAVEEN')" class="bg-zinc-700 hover:bg-zinc-500 p-4 rounded text-white border-b-4 border-zinc-950 transition-all font-bold col-span-2">PRAVEEN 🧑‍💻</button>
+                <h1 class="text-2xl md:text-4xl font-black text-white mb-1 italic tracking-tighter">INDUSTRIAL LEAP</h1>
+                <p class="text-zinc-500 mb-4 text-[10px] uppercase tracking-widest">Shared Suffering Framework</p>
+                <div class="grid grid-cols-2 gap-2 mb-6">
+                    <button onclick="startGame('AVIRUP')" class="bg-blue-900/40 hover:bg-blue-600 p-3 md:p-4 rounded text-white border-b-4 border-blue-950 transition-all font-bold text-sm">AVIRUP 👷</button>
+                    <button onclick="startGame('LAMA')" class="bg-red-900/40 hover:bg-red-600 p-3 md:p-4 rounded text-white border-b-4 border-red-950 transition-all font-bold text-sm">LAMA 🧔</button>
+                    <button onclick="startGame('MASOOM')" class="bg-green-900/40 hover:bg-green-600 p-3 md:p-4 rounded text-white border-b-4 border-green-950 transition-all font-bold text-sm">MASOOM 👨‍🏭</button>
+                    <button onclick="startGame('SAGAR')" class="bg-purple-900/40 hover:bg-purple-600 p-3 md:p-4 rounded text-white border-b-4 border-purple-950 transition-all font-bold text-sm">SAGAR 👮</button>
+                    <button onclick="startGame('PRAVEEN')" class="bg-zinc-700 hover:bg-zinc-500 p-3 md:p-4 rounded text-white border-b-4 border-zinc-950 transition-all font-bold text-sm col-span-2">PRAVEEN 🧑‍💻</button>
                 </div>
+                <p class="text-zinc-600 text-[10px] uppercase font-bold animate-pulse">Tap any profile to begin shift</p>
             </div>
 
             <div id="death-screen" class="hidden">
-                <p class="text-red-600 font-black text-3xl mb-1 tracking-tighter">CONTRACT TERMINATED</p>
+                <p class="text-red-600 font-black text-2xl md:text-3xl mb-1 tracking-tighter">CONTRACT TERMINATED</p>
                 <div class="my-4 py-2 border-y border-zinc-800">
-                    <p class="text-zinc-500 text-[10px] uppercase font-bold mb-1">Reason for Termination:</p>
-                    <p id="death-reason" class="text-white text-sm font-mono uppercase bg-red-950/30 py-1">COLLECTIVE DISMISSAL</p>
+                    <p class="text-zinc-500 text-[8px] md:text-[10px] uppercase font-bold mb-1">Reason for Termination:</p>
+                    <p id="death-reason" class="text-white text-xs md:text-sm font-mono uppercase bg-red-950/30 py-1">COLLECTIVE DISMISSAL</p>
                 </div>
-                <p id="death-quote" class="text-zinc-400 text-xs mb-6 italic leading-relaxed">"Your sacrifice was slightly profitable."</p>
-                <div class="bg-black/50 p-4 rounded border border-zinc-700 mb-6">
-                    <p class="text-zinc-500 text-[10px] uppercase mb-1 font-bold">Shared Debt Accrued</p>
-                    <p id="lost-money" class="text-yellow-500 text-4xl font-black font-mono">$0</p>
+                <p id="death-quote" class="text-zinc-400 text-[10px] md:text-xs mb-4 italic leading-relaxed">"Your sacrifice was slightly profitable."</p>
+                <div class="bg-black/50 p-3 md:p-4 rounded border border-zinc-700 mb-6">
+                    <p class="text-zinc-500 text-[8px] md:text-[10px] uppercase mb-1 font-bold">Shared Debt Accrued</p>
+                    <p id="lost-money" class="text-yellow-500 text-3xl md:text-4xl font-black font-mono">$0</p>
                 </div>
                 <div class="flex flex-col items-center">
-                    <div class="text-zinc-400 text-[10px] mb-2 uppercase tracking-[0.2em]">Next Shift Starting In</div>
-                    <div id="countdown" class="text-white text-5xl font-black font-mono">5</div>
+                    <div class="text-zinc-400 text-[8px] md:text-[10px] mb-1 uppercase tracking-[0.2em]">Next Shift Starting In</div>
+                    <div id="countdown" class="text-white text-3xl md:text-5xl font-black font-mono">5</div>
                 </div>
             </div>
         </div>
@@ -186,6 +173,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getDatabase, ref, set, onValue, update, push, onChildAdded } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
+    // Same config as provided
     const firebaseConfig = {
         apiKey: "AIzaSyBuHMgngzdgt_BDC6h4YEQVymDVmEbLs60",
         authDomain: "industrialleap.firebaseapp.com",
@@ -200,8 +188,7 @@
     const db = getDatabase(app);
 
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const smokeContainer = document.getElementById('smoke-container');
+    const ctx = canvas.getContext('2d', { alpha: false }); // Performance optimization
     const gameContainer = document.getElementById('game-container');
     
     let gameState = 'START';
@@ -209,22 +196,23 @@
     let character = 'AVIRUP';
     let platforms = [];
     let items = [];
-    const BASE_SPEED = 6;
+    const BASE_SPEED = 5;
     let speed = BASE_SPEED;
     let otherPlayersData = {}; 
-    let ghostSims = {};      
-    const gravity = 0.7;
-    const jumpStrength = -16;
+    let ghostSims = {};       
+    let gravity = 0.6;
+    let jumpStrength = -14;
+    let scaleFactor = 1;
 
-    const player = createPlayerEntity(150, 0);
+    const player = createPlayerEntity(100, 0);
     
     function createPlayerEntity(x, y) {
         return {
             x: x, 
             y: y, 
             vy: 0, 
-            width: 45, 
-            height: 45, 
+            width: 40, 
+            height: 40, 
             isGrounded: false, 
             rotation: 0,
             targetRotation: 0,
@@ -234,9 +222,9 @@
     }
 
     const buildingTypes = ['STEEL', 'CONCRETE', 'BRICK', 'METAL'];
-    const headerQuotes = ["LUNCH BREAKS ARE DEBT-COLLECTIBLE.", "WE OWN THE AIR YOU BREATHE.", "SMILE: YOU'RE BEING LEVERAGED.", "REVENUE BEFORE RESPIRATION.", "YOUR SPINE IS COMPANY PROPERTY.", "UNPAID OVERTIME IS A PRIVILEGE.", "DON'T LOOK DOWN, LOOK AT THE MARGINS.", "PRODUCTIVITY IS THE ONLY PULSE.", "WORK HARDER: THE CEO NEEDS A HOBBY.", "QUITTING IS AN UNSANCTIONED EXPENSE."];
-    const deathReasons = ["UNAUTHORIZED GRAVITATIONAL DESCENT", "KINETIC IMPACT RESTRUCTURING", "REDUNDANT BIOLOGICAL SYSTEM", "FAILURE TO DEFY PHYSICS", "EQUIPMENT DAMAGE VIA BODY IMPACT", "UNSCHEDULED FLOOR INSPECTION", "LACK of VERTICAL RETENTION", "OSHA-VIOLATING FALL TRAJECTORY", "SUDDEN CONTRACT EXPIRATION"];
-    const deathQuotes = ["Your family will not be notified.", "HR has already filled your position.", "That fall was not covered by insurance.", "We've deducted the cost of the floor from your final pay.", "An unfortunate, but statistically likely outcome.", "The shareholders are disappointed in your performance.", "Your badge has been remotely deactivated.", "Please vacate the premises immediately.", "Your locker contents have been auctioned.", "Your carbon footprint has been successfully deleted."];
+    const headerQuotes = ["LUNCH BREAKS ARE DEBT-COLLECTIBLE.", "WE OWN THE AIR YOU BREATHE.", "SMILE: YOU'RE BEING LEVERAGED.", "REVENUE BEFORE RESPIRATION.", "YOUR SPINE IS COMPANY PROPERTY.", "UNPAID OVERTIME IS A PRIVILEGE.", "PRODUCTIVITY IS THE ONLY PULSE."];
+    const deathReasons = ["UNAUTHORIZED GRAVITATIONAL DESCENT", "KINETIC IMPACT RESTRUCTURING", "REDUNDANT BIOLOGICAL SYSTEM", "FAILURE TO DEFY PHYSICS", "SUDDEN CONTRACT EXPIRATION"];
+    const deathQuotes = ["Your family will not be notified.", "HR has already filled your position.", "That fall was not covered by insurance.", "We've deducted the cost of the floor.", "The shareholders are disappointed."];
 
     let seedValue = 1;
     function syncedRandom() {
@@ -291,27 +279,13 @@
         const toast = document.getElementById('death-toast');
         toast.innerText = `[OBITUARY] ${name} TERMINATED: ${reason}`;
         toast.style.display = 'block';
-        setTimeout(() => toast.style.display = 'none', 4000);
+        setTimeout(() => toast.style.display = 'none', 3000);
     }
 
     onValue(highRef, (snapshot) => {
         const val = snapshot.val() || 0;
-        document.getElementById('high-score-display').innerText = `COLLECTIVE PEAK: $${val}`;
+        document.getElementById('high-score-display').innerText = `PEAK: $${val}`;
     });
-
-    function updateHighScore(score) { set(highRef, score); }
-
-    function syncState() {
-        if (gameState === 'PLAYING') {
-            set(ref(db, `players/${character}`), {
-                y: player.y,
-                rot: player.rotation,
-                ts: Date.now(),
-                status: 'ACTIVE'
-            });
-        }
-    }
-    setInterval(syncState, 150);
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSfx(type) {
@@ -347,52 +321,66 @@
     function resize() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        // Adapt physics to screen size
+        scaleFactor = canvas.height / 800;
+        gravity = 0.6 * scaleFactor;
+        jumpStrength = -14 * Math.sqrt(scaleFactor);
+        player.width = 40 * scaleFactor;
+        player.height = 40 * scaleFactor;
     }
 
     function createPlatform(x, width) {
         const type = buildingTypes[Math.floor(syncedRandom() * buildingTypes.length)];
-        const height = 200 + syncedRandom() * (canvas.height * 0.4);
-        return { x: x || canvas.width, y: canvas.height - height, width: width || 250 + syncedRandom() * 250, height, type, details: syncedRandom() };
+        const minHeight = canvas.height * 0.2;
+        const maxHeight = canvas.height * 0.5;
+        const height = minHeight + syncedRandom() * maxHeight;
+        const pWidth = width || (150 + syncedRandom() * 200) * scaleFactor;
+        return { x: x || canvas.width, y: canvas.height - height, width: pWidth, height, type, details: syncedRandom() };
     }
 
     function createMoney(platform) {
-        if (syncedRandom() > 0.3) {
-            items.push({ x: platform.x + (syncedRandom() * (platform.width - 40)), y: platform.y - 60 - syncedRandom() * 100, width: 30, height: 30, collected: false });
+        if (syncedRandom() > 0.4) {
+            items.push({ 
+                x: platform.x + (syncedRandom() * (platform.width - 30)), 
+                y: platform.y - 40 - syncedRandom() * 80, 
+                width: 25 * scaleFactor, 
+                height: 25 * scaleFactor, 
+                collected: false 
+            });
         }
     }
 
     function initGame(isReentry = false) {
         seedValue = Math.floor(Date.now() / 60000); 
-        platforms = [createPlatform(50, 600)];
+        platforms = [createPlatform(50, canvas.width * 0.8)];
         items = [];
         
-        player.x = isReentry ? 350 : 150;
-        player.y = platforms[0].y - player.height - 10;
+        player.x = 100 * scaleFactor;
+        player.y = platforms[0].y - player.height - 20;
         player.vy = 0;
         player.rotation = 0;
         player.targetRotation = 0;
         money = 0;
-        speed = BASE_SPEED;
+        speed = BASE_SPEED * scaleFactor;
         updateUI();
         
         for (let char in ghostSims) {
             ghostSims[char].y = player.y;
             ghostSims[char].vy = 0;
-            ghostSims[char].rotation = 0;
         }
 
-        for(let i=1; i<5; i++) {
+        for(let i=1; i<4; i++) {
             const last = platforms[platforms.length-1];
-            const p = createPlatform(last.x + last.width + 120 + syncedRandom() * 180);
+            const p = createPlatform(last.x + last.width + (80 + syncedRandom() * 120) * scaleFactor);
             platforms.push(p);
             createMoney(p);
         }
-        document.getElementById('sync-status').innerText = "LIVE ON THE HIVE";
+        document.getElementById('sync-status').innerText = "LIVE ON HIVE";
     }
 
     function updateUI() {
         document.getElementById('money-display').innerText = `BUDGET: $${money}`;
-        if (money % 5 === 0) {
+        if (money % 10 === 0) {
             document.getElementById('status-msg').innerText = headerQuotes[Math.floor(Math.random() * headerQuotes.length)];
         }
     }
@@ -436,7 +424,8 @@
         const wasGrounded = entity.isGrounded;
         entity.isGrounded = false;
         
-        platforms.forEach(p => {
+        for (let i = 0; i < platforms.length; i++) {
+            const p = platforms[i];
             if (entity.x + entity.width > p.x && entity.x < p.x + p.width && 
                 entity.y + entity.height > p.y && entity.y + entity.height < p.y + p.height + 20 && 
                 entity.vy >= 0) {
@@ -447,10 +436,11 @@
                 if (!wasGrounded && isLocal) {
                     playSfx('land');
                     gameContainer.classList.add('shake');
-                    setTimeout(() => gameContainer.classList.remove('shake'), 200);
+                    setTimeout(() => gameContainer.classList.remove('shake'), 150);
                 }
+                break;
             }
-        });
+        }
 
         if (isLocal && entity.y > canvas.height) die();
     }
@@ -458,7 +448,7 @@
     function gameUpdate() {
         if (gameState !== 'PLAYING') return;
         
-        speed += 0.0012; 
+        speed += 0.0008; 
         seedValue += 0.001;
 
         updateEntityPhysics(player, true);
@@ -481,11 +471,12 @@
 
         if (platforms.length > 0 && platforms[platforms.length-1].x < canvas.width) {
             const last = platforms[platforms.length-1];
-            const p = createPlatform(last.x + last.width + 120 + syncedRandom() * 250);
+            const p = createPlatform(last.x + last.width + (80 + syncedRandom() * 150) * scaleFactor);
             platforms.push(p); createMoney(p);
         }
-        platforms = platforms.filter(p => p.x + p.width > -200);
-        items = items.filter(i => i.x + i.width > -100 && !i.collected);
+        
+        if (platforms[0] && platforms[0].x + platforms[0].width < -50) platforms.shift();
+        if (items[0] && (items[0].x + items[0].width < -50 || items[0].collected)) items.shift();
     }
 
     function showMoneyToast(x, y) {
@@ -512,7 +503,7 @@
         
         onValue(highRef, (snapshot) => {
             const currentHigh = snapshot.val() || 0;
-            if (money > currentHigh) updateHighScore(money);
+            if (money > currentHigh) set(highRef, money);
         }, { onlyOnce: true });
 
         let count = 5;
@@ -546,47 +537,44 @@
             case 'METAL': primary = '#2c5282'; accent = '#2a4365'; break;
             case 'STEEL': primary = '#2d3748'; accent = '#1a202c'; break;
         }
-        ctx.fillStyle = primary; ctx.fillRect(p.x, p.y, p.width, p.height);
-        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(p.x + p.width - 20, p.y, 20, p.height);
-        ctx.strokeStyle = accent; ctx.lineWidth = 2;
+        ctx.fillStyle = primary; 
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(p.x + p.width - 15, p.y, 15, p.height);
+        
+        ctx.strokeStyle = accent; ctx.lineWidth = 1;
         if (p.type === 'STEEL') {
             ctx.beginPath();
-            for(let i=0; i<p.width; i+=60) {
-                ctx.moveTo(p.x+i, p.y); ctx.lineTo(p.x+i+60, p.y+p.height);
-                ctx.moveTo(p.x+i+60, p.y); ctx.lineTo(p.x+i, p.y+p.height);
+            for(let i=0; i<p.width; i+=40) {
+                ctx.moveTo(p.x+i, p.y); ctx.lineTo(p.x+i+40, p.y+p.height);
             }
-            ctx.stroke();
-        } else if (p.type === 'BRICK') {
-            ctx.beginPath();
-            for(let i=10; i<p.height; i+=20) { ctx.moveTo(p.x, p.y+i); ctx.lineTo(p.x+p.width, p.y+i); }
             ctx.stroke();
         } else if (p.type === 'CONCRETE') {
-            ctx.fillStyle = '#111';
-            for(let i=30; i<p.width-30; i+=50) {
-                for(let j=30; j<p.height-30; j+=60) ctx.fillRect(p.x+i, p.y+j, 20, 30);
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            for(let i=15; i<p.width-15; i+=30) {
+                for(let j=15; j<p.height-15; j+=40) ctx.fillRect(p.x+i, p.y+j, 10, 15);
             }
-        } else if (p.type === 'METAL') {
-            ctx.beginPath();
-            for(let i=0; i<p.width; i+=10) { ctx.moveTo(p.x+i, p.y); ctx.lineTo(p.x+i, p.y+p.height); }
-            ctx.stroke();
         }
-        ctx.fillStyle = '#222';
-        if (p.details > 0.5) ctx.fillRect(p.x + 20, p.y - 20, 30, 20);
-        if (p.details > 0.8) ctx.fillRect(p.x + p.width - 30, p.y - 40, 5, 40);
+        
+        // Hazard line at top
         ctx.fillStyle = '#ecc94b';
-        for(let i=0; i<p.width; i+=20) { if ((i/20)%2 === 0) ctx.fillRect(p.x+i, p.y, 20, 5); }
+        for(let i=0; i<p.width; i+=20) { if ((i/20)%2 === 0) ctx.fillRect(p.x+i, p.y, 10, 3); }
         ctx.restore();
     }
 
     const charMap = { 'AVIRUP': '👷', 'LAMA': '🧔', 'MASOOM': '👨‍🏭', 'SAGAR': '👮', 'PRAVEEN': '🧑‍💻' };
 
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#1a2a3a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
         platforms.forEach(drawPlatform);
+        
         items.forEach(item => {
             if (!item.collected) {
-                ctx.font = '30px Arial'; ctx.shadowColor = "yellow"; ctx.shadowBlur = 10;
-                ctx.fillText('🤑', item.x, item.y + 25); ctx.shadowBlur = 0;
+                ctx.font = `${24 * scaleFactor}px Arial`;
+                ctx.fillText('🤑', item.x, item.y + (20 * scaleFactor));
             }
         });
 
@@ -595,10 +583,10 @@
             const sim = ghostSims[char];
             if (char !== character && sim.status === 'ACTIVE' && (now - sim.lastUpdate) < 5000) {
                 ctx.save();
-                ctx.globalAlpha = 0.35;
+                ctx.globalAlpha = 0.3;
                 ctx.translate(sim.x + sim.width/2, sim.y + sim.height/2);
                 ctx.rotate(sim.rotation);
-                ctx.font = '40px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = `${30 * scaleFactor}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText(charMap[char], 0, 0);
                 ctx.restore();
             }
@@ -607,7 +595,7 @@
         ctx.save();
         ctx.translate(player.x + player.width/2, player.y + player.height/2);
         ctx.rotate(player.rotation);
-        ctx.font = '50px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `${40 * scaleFactor}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(charMap[character] || '👤', 0, 0);
         ctx.restore();
 
@@ -615,11 +603,31 @@
         requestAnimationFrame(draw);
     }
 
-    window.addEventListener('mousedown', jump);
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, {passive: false});
+    // Input handlers
+    const handleInput = (e) => {
+        if (e.type === 'touchstart') e.preventDefault();
+        jump();
+    };
+    
+    window.addEventListener('mousedown', handleInput);
+    window.addEventListener('touchstart', handleInput, {passive: false});
     window.addEventListener('keydown', (e) => { if (e.code === 'Space') jump(); });
     window.addEventListener('resize', resize);
-    resize(); draw();
+    
+    // Periodically update server state
+    setInterval(() => {
+        if (gameState === 'PLAYING') {
+            update(ref(db, `players/${character}`), {
+                y: player.y,
+                rot: player.rotation,
+                ts: Date.now(),
+                status: 'ACTIVE'
+            });
+        }
+    }, 200);
+
+    resize(); 
+    draw();
 </script>
 </body>
 </html>
