@@ -6,9 +6,7 @@
     <title>Live Stock Inventory Graph</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Use the bundled date-fns version that works in the browser without require() -->
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/dist/date-fns.min.js"></script>
-    <!-- Updated adapter to a more stable version for the browser -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -28,7 +26,7 @@
                 <div class="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-sky-500/30">V</div>
                 <div>
                     <h1 class="font-bold text-lg leading-tight">STOCK ANALYTICS</h1>
-                    <p class="text-[10px] text-sky-400 font-mono">VELp9 PLANT SYSTEMS</p>
+                    <p class="text-[10px] text-sky-400 font-mono">VELP9 PLANT SYSTEMS</p>
                 </div>
             </div>
 
@@ -41,7 +39,7 @@
 
             <div class="relative w-full md:w-64">
                 <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Search Part Number..." 
-                       class="w-full bg-slate-800 border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-sky-500 transition outline-none">
+                       class="w-full bg-slate-800 border-none rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-sky-500 transition outline-none text-white">
                 <svg class="w-4 h-4 absolute right-3 top-2.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             </div>
         </div>
@@ -49,8 +47,7 @@
 
     <main class="max-w-7xl mx-auto p-4 md:p-8">
         <div id="graph-list" class="space-y-8">
-            <!-- Dynamic Content -->
-            <div id="loader" class="flex flex-col items-center justify-center py-20 text-slate-400 italic">
+            <div id="initial-loader" class="flex flex-col items-center justify-center py-20 text-slate-400 italic">
                 <div class="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                 Initializing Inventory Data...
             </div>
@@ -60,7 +57,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-app.js";
         import { 
-            getFirestore, collection, onSnapshot, getDocs, doc, query, orderBy
+            getFirestore, collection, onSnapshot, getDocs, query, orderBy 
         } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -80,8 +77,15 @@
         let partsData = [];
         let charts = {};
 
+        const destroyAllCharts = () => {
+            Object.keys(charts).forEach(key => charts[key].destroy());
+            charts = {};
+        };
+
         window.changeLoc = (loc) => {
+            if (currentLoc === loc) return;
             currentLoc = loc;
+            destroyAllCharts();
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`nav-${loc}`).classList.add('active');
             fetchParts();
@@ -95,11 +99,9 @@
         const fetchParts = () => {
             const partsRef = collection(db, `Locations/${currentLoc}/Parts`);
             onSnapshot(partsRef, (snapshot) => {
-                // Map data and sort by highest QT (stock) descending
                 partsData = snapshot.docs
                     .map(d => ({ id: d.id, ...d.data() }))
                     .sort((a, b) => (Number(b.QT) || 0) - (Number(a.QT) || 0));
-                
                 renderGraphs();
             }, (error) => console.error("Snapshot error:", error));
         };
@@ -122,9 +124,9 @@
 
         const renderGraphs = async () => {
             const container = document.getElementById('graph-list');
+            destroyAllCharts();
             container.innerHTML = '';
             
-            // Filter by search query (partsData is already sorted by highest stock)
             const filtered = partsData.filter(p => p.id.toLowerCase().includes(searchQuery));
 
             if (filtered.length === 0) {
@@ -134,7 +136,7 @@
 
             for (const part of filtered) {
                 const partDiv = document.createElement('div');
-                partDiv.className = 'glass-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition';
+                partDiv.className = 'glass-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition mb-8';
                 partDiv.innerHTML = `
                     <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
@@ -165,20 +167,16 @@
         };
 
         window.updateChartScale = async (partId, days) => {
-            const btns = [1, 15, 30];
-            btns.forEach(d => {
-                const b = document.getElementById(`btn-${d}-${partId}`);
-                if (b) {
-                    if (d === days) {
-                        b.classList.add('bg-white', 'shadow-sm');
-                    } else {
-                        b.classList.remove('bg-white', 'shadow-sm');
-                    }
-                }
-            });
-
             const chart = charts[partId];
             if (!chart) return;
+
+            [1, 15, 30].forEach(d => {
+                const b = document.getElementById(`btn-${d}-${partId}`);
+                if (b) {
+                    if (d === days) b.classList.add('bg-white', 'shadow-sm');
+                    else b.classList.remove('bg-white', 'shadow-sm');
+                }
+            });
 
             const part = partsData.find(p => p.id === partId);
             const events = await fetchEvents(partId);
@@ -191,32 +189,30 @@
             dataPoints.push({ x: now, y: currentRunningStock });
 
             for (let event of events) {
-                let previousStock = currentRunningStock - event.Qt;
-                
                 if (event.Time >= cutoff) {
                     dataPoints.push({ x: event.Time, y: currentRunningStock });
-                    dataPoints.push({ x: event.Time, y: previousStock });
-                }
-                
-                currentRunningStock = previousStock;
-                if (event.Time < cutoff) {
+                    currentRunningStock = currentRunningStock - event.Qt;
+                } else {
                     dataPoints.push({ x: cutoff, y: currentRunningStock });
+                    currentRunningStock = currentRunningStock - event.Qt;
                     break;
                 }
             }
 
-            if (dataPoints.length === 1) {
+            if (dataPoints.length === 1 || dataPoints[dataPoints.length-1].x > cutoff) {
                 dataPoints.push({ x: cutoff, y: currentRunningStock });
             }
 
             chart.data.datasets[0].data = dataPoints.sort((a,b) => a.x - b.x);
             chart.options.scales.x.min = cutoff;
             chart.options.scales.x.max = now;
-            chart.update();
+            chart.update('none');
         };
 
         const initChart = (partId, currentQty) => {
-            const ctx = document.getElementById(`chart-${partId}`).getContext('2d');
+            const canvas = document.getElementById(`chart-${partId}`);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
             
             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
             gradient.addColorStop(0, 'rgba(14, 165, 233, 0.2)');
@@ -229,26 +225,27 @@
                         label: 'Stock Level',
                         data: [{ x: new Date(), y: Number(currentQty) || 0 }],
                         borderColor: '#0ea5e9',
-                        borderWidth: 2.5,
-                        pointRadius: 0,
+                        borderWidth: 2,
+                        pointRadius: 4,
                         pointHoverRadius: 6,
                         fill: true,
                         backgroundColor: gradient,
-                        stepped: 'before'
+                        tension: 0 // Set to 0 for perfectly straight lines
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false,
                     interaction: { intersect: false, mode: 'index' },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
                             backgroundColor: '#0f172a',
-                            titleFont: { size: 10 },
-                            bodyFont: { size: 12, weight: 'bold' },
                             padding: 12,
-                            cornerRadius: 8
+                            cornerRadius: 8,
+                            titleFont: { size: 10 },
+                            bodyFont: { weight: 'bold' }
                         }
                     },
                     scales: {
@@ -256,13 +253,10 @@
                             type: 'time',
                             time: { 
                                 unit: 'day',
-                                displayFormats: { 
-                                    day: 'MMM d',
-                                    hour: 'HH:mm'
-                                }
+                                displayFormats: { day: 'MMM d', hour: 'HH:mm' }
                             },
                             grid: { display: false },
-                            ticks: { font: { size: 10, weight: 'bold' }, color: '#94a3b8' }
+                            ticks: { font: { size: 10 }, color: '#94a3b8' }
                         },
                         y: {
                             beginAtZero: true,
